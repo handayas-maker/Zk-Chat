@@ -1,0 +1,15 @@
+{
+  "name": "zk-chat",
+  "version": "2.1.0",
+  "description": "ZK Chat — Private, no-trace P2P chat with premium features",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

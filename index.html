@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex, nofollow">
+<title>ZK Chat — Private, No Trace</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #0a0a0f;
+    --bg-elevated: #13131a;
+    --bg-input: #1a1a24;
+    --border: #2a2a36;
+    --text: #e8e8ed;
+    --text-dim: #8a8a96;
+    --accent: #7c6cf5;
+    --accent-hover: #6b5cea;
+    --gold: #fbbf24;
+    --gold-dim: #d97706;
+    --success: #4ade80;
+    --danger: #f87171;
+    --safe-top: env(safe-area-inset-top, 0);
+    --safe-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 15px;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+  }
+
+  #app {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .landing {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .landing-card {
+    width: 100%;
+    max-width: 440px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px 26px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-size: 22px;
+    font-weight: 600;
+  }
+
+  .logo-dot {
+    width: 10px; height: 10px;
+    background: var(--success);
+    border-radius: 50%;
+    box-shadow: 0 0 12px var(--success);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .tagline {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+
+  .section-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: inherit;
+    min-height: 48px;
+    touch-action: manipulation;
+  }
+
+  .btn:hover { background: var(--accent-hover); }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-secondary {
+    background: var(--bg-input);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: #20202c; }
+
+  .btn-gold {
+    background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+    color: #0a0a0f;
+    font-weight: 600;
+  }
+  .btn-gold:hover { filter: brightness(1.1); }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .input-group { display: flex; gap: 8px; }
+
+  input[type="text"] {
+    flex: 1;
+    padding: 14px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 16px;
+    font-family: inherit;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    outline: none;
+    transition: border-color 0.15s;
+    min-height: 48px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  input[type="text"]:focus { border-color: var(--accent); }
+  input[type="text"]::placeholder { color: var(--text-dim); text-transform: none; letter-spacing: normal; }
+
+  .premium-promo {
+    margin-top: 20px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(251,191,36,0.08), rgba(217,119,6,0.04));
+    border: 1px solid rgba(251,191,36,0.3);
+    border-radius: 12px;
+  }
+
+  .premium-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gold);
+    margin-bottom: 10px;
+  }
+
+  .premium-features {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.7;
+    margin-bottom: 12px;
+  }
+
+  .premium-features-item { display: flex; align-items: center; gap: 6px; }
+  .premium-features-item::before { content: '✨'; font-size: 10px; }
+
+  .premium-price {
+    font-size: 13px;
+    color: var(--text);
+  }
+  .premium-price strong { color: var(--gold); font-size: 16px; }
+
+  .code-display {
+    margin-top: 18px;
+    padding: 18px;
+    background: var(--bg-input);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    text-align: center;
+  }
+
+  .code-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  .code-value {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    margin-bottom: 12px;
+    user-select: all;
+    -webkit-user-select: all;
+  }
+
+  .premium-badge-inline {
+    display: inline-block;
+    background: var(--gold);
+    color: #0a0a0f;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-left: 6px;
+  }
+
+  .code-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+  .copy-btn, .share-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    min-height: 36px;
+  }
+  .copy-btn:hover, .share-btn:hover { color: var(--text); border-color: var(--text-dim); }
+  .share-btn { display: none; }
+  .share-btn.visible { display: inline-block; }
+
+  .status {
+    margin-top: 14px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    text-align: center;
+    line-height: 1.4;
+  }
+  .status.info { background: rgba(124,108,245,0.1); color: var(--accent); border: 1px solid rgba(124,108,245,0.3); }
+  .status.error { background: rgba(248,113,113,0.1); color: var(--danger); border: 1px solid rgba(248,113,113,0.3); }
+  .status.waiting { background: rgba(251,191,36,0.1); color: var(--gold); border: 1px solid rgba(251,191,36,0.3); }
+  .status.success { background: rgba(74,222,128,0.1); color: var(--success); border: 1px solid rgba(74,222,128,0.3); }
+
+  .privacy-list {
+    margin-top: 22px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.8;
+  }
+  .privacy-list-item { display: flex; align-items: center; gap: 8px; }
+  .privacy-list-item::before { content: '✓'; color: var(--success); font-weight: 700; }
+
+  .sponsor-slot {
+    margin-top: 20px;
+    padding: 14px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.5;
+  }
+  .sponsor-slot a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  .sponsor-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.6; margin-bottom: 6px; }
+
+  .footer-links {
+    margin-top: 16px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .footer-links a {
+    color: var(--text-dim);
+    text-decoration: none;
+    border-bottom: 1px dashed var(--border);
+    padding-bottom: 1px;
+  }
+  .footer-links a:hover { color: var(--accent); }
+
+  .legal-notice {
+    margin-top: 14px;
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: center;
+    opacity: 0.7;
+    line-height: 1.4;
+  }
+
+  .chat-screen { display: none; flex-direction: column; height: 100%; }
+  .chat-screen.active { display: flex; }
+
+  .chat-header {
+    padding: 12px 16px;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    gap: 8px;
+  }
+
+  .chat-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+  .conn-indicator {
+    width: 8px; height: 8px;
+    background: var(--success);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--success);
+    flex-shrink: 0;
+  }
+  .conn-indicator.disconnected { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  .chat-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .chat-subtitle { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  .premium-tag {
+    background: var(--gold);
+    color: #0a0a0f;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .leave-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--danger);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    min-height: 36px;
+    flex-shrink: 0;
+  }
+  .leave-btn:hover { background: rgba(248,113,113,0.1); border-color: var(--danger); }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overscroll-behavior: contain;
+  }
+
+  .messages::-webkit-scrollbar { width: 6px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 15px;
+    line-height: 1.45;
+    word-wrap: break-word;
+    word-break: break-word;
+    animation: slideIn 0.2s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg.me { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 4px; }
+  .msg.them { align-self: flex-start; background: var(--bg-elevated); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+
+  .msg.system {
+    align-self: center;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 12px;
+    text-align: center;
+    padding: 6px 12px;
+    max-width: 90%;
+    font-style: italic;
+  }
+
+  .msg-time { font-size: 10px; opacity: 0.7; margin-top: 4px; display: block; }
+
+  .msg-photo {
+    max-width: 240px;
+    max-height: 320px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .msg-photo-loading {
+    width: 200px;
+    height: 150px;
+    background: var(--bg-input);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .msg-photo-progress {
+    width: 200px;
+    height: 6px;
+    background: var(--bg-input);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .msg-photo-progress-bar {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.2s;
+  }
+
+  .msg-location {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    min-width: 200px;
+  }
+  .msg-location:hover { border-color: var(--accent); }
+  .msg.me .msg-location { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.2); }
+
+  .msg-location-icon { font-size: 22px; flex-shrink: 0; }
+  .msg-location-text { font-size: 13px; line-height: 1.4; }
+  .msg-location-coords { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+
+  .msg-live-tracking {
+    background: rgba(74,222,128,0.1);
+    border: 1px solid var(--success);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 220px;
+  }
+
+  .live-dot {
+    width: 8px; height: 8px;
+    background: var(--success);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--success);
+    animation: pulse 1.5s infinite;
+    flex-shrink: 0;
+  }
+
+  .composer {
+    padding: 10px 12px;
+    padding-bottom: max(10px, var(--safe-bottom));
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+
+  .composer textarea {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    padding: 11px 14px;
+    font-size: 16px;
+    font-family: inherit;
+    resize: none;
+    max-height: 120px;
+    min-height: 44px;
+    outline: none;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .composer textarea:focus { border-color: var(--accent); }
+
+  .composer-btn {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+    touch-action: manipulation;
+  }
+
+  .composer-btn:hover { background: #20202c; color: var(--text); }
+  .composer-btn:active { transform: scale(0.95); }
+  .composer-btn.premium-locked { opacity: 0.5; }
+  .composer-btn.active { background: var(--success); color: white; border-color: var(--success); }
+
+  .composer-btn svg { width: 20px; height: 20px; }
+
+  .send-btn {
+    background: var(--accent);
+    border: none;
+    color: white;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+    touch-action: manipulation;
+  }
+  .send-btn:hover { background: var(--accent-hover); }
+  .send-btn:active { transform: scale(0.95); }
+  .send-btn svg { width: 18px; height: 18px; }
+
+  .typing-indicator {
+    color: var(--text-dim);
+    font-size: 12px;
+    padding: 0 16px 6px;
+    height: 18px;
+    font-style: italic;
+  }
+
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .modal-overlay.active { display: flex; }
+
+  .modal {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 380px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .modal-subtitle {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+
+  .premium-features-modal {
+    background: var(--bg-input);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 18px;
+  }
+
+  .premium-features-modal-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 14px;
+  }
+  .premium-features-modal-item::before { content: '✨'; }
+
+  .price-tag {
+    text-align: center;
+    margin: 16px 0;
+  }
+  .price-tag-amount {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--gold);
+  }
+  .price-tag-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .modal-actions .btn { width: auto; flex: 1; }
+
+  .photo-viewer {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.95);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .photo-viewer.active { display: flex; }
+  .photo-viewer img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+  .photo-viewer-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  @media (max-width: 380px) {
+    .landing-card { padding: 24px 18px; }
+    .code-value { font-size: 24px; letter-spacing: 0.12em; }
+    .msg { max-width: 85%; font-size: 14px; }
+    .logo { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div class="landing" id="landing">
+    <div class="landing-card">
+      <div class="logo">
+        <span class="logo-dot"></span>
+        <span>ZK Chat</span>
+      </div>
+      <p class="tagline">
+        Chat privat tanpa jejak. Tidak ada akun, tidak ada server menyimpan pesan, tidak ada history. Tutup tab — semuanya hilang.
+      </p>
+
+      <div id="initial-options">
+        <div class="section-title">Mulai percakapan baru</div>
+        <button class="btn" id="generate-btn">Buat kode unik (Gratis)</button>
+
+        <div class="premium-promo">
+          <div class="premium-title">⭐ Sesi Premium</div>
+          <div class="premium-features">
+            <div class="premium-features-item">Kirim foto & selfie (auto-hilang)</div>
+            <div class="premium-features-item">Share lokasi pin</div>
+            <div class="premium-features-item">Live location tracking</div>
+          </div>
+          <div class="premium-price">
+            Sekali bayar <strong>Rp 10.000</strong> per sesi
+          </div>
+          <button class="btn btn-gold" id="generate-premium-btn" style="margin-top:12px;">⭐ Buat sesi Premium</button>
+        </div>
+
+        <div class="divider">atau</div>
+
+        <div class="section-title">Gabung dengan kode</div>
+        <div class="input-group">
+          <input type="text" id="join-code" placeholder="6-karakter kode" maxlength="6" autocomplete="off" autocapitalize="characters" inputmode="text">
+          <button class="btn btn-secondary" id="join-btn" style="width:auto; padding:14px 20px;">Join</button>
+        </div>
+      </div>
+
+      <div id="code-shown" style="display:none;">
+        <div class="code-display">
+          <div class="code-label">
+            Kode anda
+            <span class="premium-badge-inline" id="premium-badge" style="display:none;">⭐ Premium</span>
+          </div>
+          <div class="code-value" id="my-code">------</div>
+          <div class="code-actions">
+            <button class="copy-btn" id="copy-btn">Salin kode</button>
+            <button class="share-btn" id="share-btn">Bagikan</button>
+          </div>
+        </div>
+        <div class="status waiting" id="wait-status">
+          Bagikan kode ini ke lawan bicara. Menunggu mereka bergabung...
+        </div>
+        <button class="btn btn-secondary" id="cancel-btn" style="margin-top:14px;">Batal</button>
+      </div>
+
+      <div id="status-area"></div>
+
+      <div class="sponsor-slot" id="sponsor-slot">
+        <div class="sponsor-label">Sponsor</div>
+        <div id="sponsor-content">
+          <a href="#" id="sponsor-link" target="_blank" rel="noopener">Lindungi koneksi anda dengan VPN</a>
+        </div>
+      </div>
+
+      <div class="privacy-list">
+        <div class="privacy-list-item">Peer-to-peer terenkripsi (DTLS/SRTP)</div>
+        <div class="privacy-list-item">Tidak ada pesan disimpan di server</div>
+        <div class="privacy-list-item">Tidak ada history, tidak ada log</div>
+        <div class="privacy-list-item">Sesi maksimal 12 jam, otomatis reset</div>
+        <div class="privacy-list-item">Tutup tab = semua data hilang</div>
+      </div>
+
+      <div class="footer-links">
+        <a href="#" id="donate-link">☕ Donasi</a>
+        <a href="#" id="terms-link">Syarat & Ketentuan</a>
+      </div>
+
+      <div class="legal-notice">
+        Dengan menggunakan layanan ini, anda setuju untuk tidak menggunakannya untuk hal yang melanggar hukum.
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-screen" id="chat-screen">
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <span class="conn-indicator" id="conn-dot"></span>
+        <div>
+          <div class="chat-title">
+            <span>Private session</span>
+            <span class="premium-tag" id="chat-premium-tag" style="display:none;">Premium</span>
+          </div>
+          <div class="chat-subtitle" id="chat-subtitle">Terhubung • End-to-end</div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div id="session-timer" style="display:none; font-family:'SF Mono',Monaco,monospace; font-size:11px; color:var(--text-dim); padding:4px 8px; background:var(--bg-input); border-radius:6px; border:1px solid var(--border);">12:00:00</div>
+        <button class="leave-btn" id="leave-btn">Keluar</button>
+      </div>
+    </div>
+
+    <div class="messages" id="messages"></div>
+    <div class="typing-indicator" id="typing"></div>
+
+    <div class="composer">
+      <button class="composer-btn" id="photo-btn" title="Kirim foto" aria-label="Kirim foto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+          <polyline points="21 15 16 10 5 21"></polyline>
+        </svg>
+      </button>
+
+      <button class="composer-btn" id="location-btn" title="Kirim lokasi" aria-label="Kirim lokasi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+          <circle cx="12" cy="10" r="3"></circle>
+        </svg>
+      </button>
+
+      <textarea id="msg-input" placeholder="Ketik pesan..." rows="1" autocomplete="off" autocorrect="off"></textarea>
+
+      <button class="send-btn" id="send-btn" aria-label="Kirim">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+
+    <input type="file" id="photo-input" accept="image/*" style="display:none;">
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="premium-modal">
+  <div class="modal">
+    <div class="modal-title">⭐ Sesi Premium</div>
+    <div class="modal-subtitle">Unlock fitur tambahan untuk satu sesi chat ini saja. Tidak ada langganan.</div>
+
+    <div class="premium-features-modal">
+      <div class="premium-features-modal-item">Kirim foto & selfie</div>
+      <div class="premium-features-modal-item">Share lokasi pin</div>
+      <div class="premium-features-modal-item">Live location tracking</div>
+      <div class="premium-features-modal-item">Semua tetap end-to-end encrypted</div>
+    </div>
+
+    <div class="price-tag">
+      <div class="price-tag-amount">Rp 10.000</div>
+      <div class="price-tag-label">Sekali bayar per sesi</div>
+    </div>
+
+    <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 12px; font-size: 12px; color: var(--text-dim); text-align: center; line-height: 1.5;">
+      <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7; margin-bottom: 6px;">Metode pembayaran</div>
+      <div style="color: var(--text); font-weight: 500;">📱 QRIS</div>
+      <div style="margin-top: 4px; font-size: 11px;">Scan dengan GoPay, OVO, Dana, ShopeePay, LinkAja, atau mobile banking apa pun</div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="premium-cancel-btn">Nanti saja</button>
+      <button class="btn btn-gold" id="premium-pay-btn">Bayar dengan QRIS</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="terms-modal">
+  <div class="modal">
+    <div class="modal-title">Syarat & Ketentuan</div>
+    <div class="modal-subtitle" style="line-height:1.6; max-height:50vh; overflow-y:auto; padding-right:8px;">
+      <strong>1. Penggunaan yang diizinkan</strong><br>
+      Layanan ini disediakan untuk komunikasi pribadi yang sah. Dilarang menggunakan untuk: pelecehan, ancaman, penyebaran konten ilegal, penipuan, atau aktivitas yang melanggar hukum Indonesia.<br><br>
+
+      <strong>2. Privasi data</strong><br>
+      Pesan teks dan foto dikirim peer-to-peer dengan enkripsi end-to-end. Operator layanan tidak memiliki akses ke isi pesan atau foto anda. Tidak ada history yang disimpan. Sesi chat maksimal 12 jam, setelah itu otomatis berakhir dan halaman akan reload.<br><br>
+
+      <strong>3. Pembayaran Premium</strong><br>
+      Pembayaran Rp 10.000 berlaku untuk satu sesi chat saja dan tidak dapat di-refund setelah fitur aktif. Pembayaran diproses melalui penyedia payment gateway pihak ketiga.<br><br>
+
+      <strong>4. Batasan tanggung jawab</strong><br>
+      Operator tidak bertanggung jawab atas konten yang dipertukarkan antar pengguna. Pengguna sepenuhnya bertanggung jawab atas konten yang mereka kirim.<br><br>
+
+      <strong>5. Konten ilegal</strong><br>
+      Penggunaan untuk pertukaran konten ilegal (termasuk namun tidak terbatas pada konten yang melibatkan anak di bawah umur, ancaman, penipuan) akan dilaporkan ke pihak berwajib sesuai UU ITE.<br><br>
+
+      <strong>6. Batasan akses (Rate Limiting)</strong><br>
+      Untuk mencegah penyalahgunaan, IP yang melakukan lebih dari 5 percobaan koneksi atau request layanan dalam 1 jam akan di-suspend selama 24 jam. Setelah masa suspend berakhir, akses akan dipulihkan otomatis. Operator berhak memperpanjang masa suspend untuk kasus penyalahgunaan berulang.
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="terms-close-btn" style="width:100%;">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="location-modal">
+  <div class="modal">
+    <div class="modal-title">📍 Kirim Lokasi</div>
+    <div class="modal-subtitle">Pilih jenis lokasi yang ingin dibagikan</div>
+    <div class="modal-actions" style="flex-direction:column; gap:10px;">
+      <button class="btn" id="send-pin-btn">📍 Kirim lokasi sekali</button>
+      <button class="btn btn-secondary" id="send-live-btn">🟢 Live tracking (5 menit)</button>
+      <button class="btn btn-secondary" id="location-cancel-btn">Batal</button>
+    </div>
+  </div>
+</div>
+
+<div class="photo-viewer" id="photo-viewer">
+  <button class="photo-viewer-close" id="photo-viewer-close">✕</button>
+  <img id="photo-viewer-img" alt="">
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
