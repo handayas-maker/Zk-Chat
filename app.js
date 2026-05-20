@@ -1,1026 +1,658 @@
 (function () {
   'use strict';
 
-  const CONFIG = window.GHOST_CHAT_CONFIG || {};
+  const C  = window.ZK_CONFIG   || {};
+  const F  = C.features         || {};
+  const I  = C.i18n             || {};
+  const SESSION_MS = (F.sessionMaxHours || 12) * 3600000;
+  const CHUNK      = 16 * 1024;
+  const MAX_PHOTO  = (F.maxPhotoSizeMB  || 5)  * 1024 * 1024;
 
-  let ws = null;
-  let pc = null;
-  let dc = null;
-  let myCode = null;
-  let isInitiator = false;
-  let isPremium = false;
-  let premiumToken = null;
-  let typingTimeout = null;
-  let lastTypingSent = 0;
-  let paymentCheckInterval = null;
-  let currentOrderId = null;
+  // ── DOM helper — HARUS di atas semua fungsi yang menggunakannya ──
+  const $ = id => document.getElementById(id);
 
-  let receivingPhoto = null;
-  let liveTrackingWatchId = null;
-  let liveTrackingTimeout = null;
-  let sessionTimerInterval = null;
-  let sessionStartTime = null;
-  const PHOTO_CHUNK_SIZE = 16 * 1024;
-  const MAX_PHOTO_SIZE = (CONFIG.features?.maxPhotoSizeMB || 2) * 1024 * 1024;
-  const SESSION_MAX_DURATION_MS = (CONFIG.features?.sessionMaxHours || 12) * 60 * 60 * 1000;
+  // ── i18n ─────────────────────────────────────────────────
+  let lang = localStorage.getItem('zk-lang') || 'id';
 
-  const $ = (id) => document.getElementById(id);
-  const landing = $('landing');
-  const chatScreen = $('chat-screen');
-  const initialOpts = $('initial-options');
-  const codeShown = $('code-shown');
+  function t(key) { return (I[lang] && I[lang][key]) || (I.id && I.id[key]) || key; }
+
+  function fetchCounter() {
+    fetch('/api/stats')
+      .then(r => r.json())
+      .then(data => {
+        const n = data.sessions || 0;
+        const formatted = n.toLocaleString('en-US').replace(/,/g, '.');
+        const el = $('counter-value');
+        if (el) el.textContent = formatted;
+        updateCounterLabels();
+      })
+      .catch(() => {
+        const el = $('counter-value');
+        if (el) el.textContent = '—';
+      });
+  }
+
+  function updateCounterLabels() {
+    const label  = $('counter-label');
+    const suffix = $('counter-suffix');
+    if (label)  label.textContent  = lang === 'en' ? 'Used' : 'Digunakan';
+    if (suffix) suffix.textContent = lang === 'en' ? 'times' : 'kali';
+  }
+
+  function applyLang() {
+    document.documentElement.lang = lang;
+
+    // text nodes
+    document.querySelectorAll('[data-t]').forEach(el => {
+      el.textContent = t(el.dataset.t);
+    });
+    // placeholders
+    document.querySelectorAll('[data-t-placeholder]').forEach(el => {
+      el.placeholder = t(el.dataset.tPlaceholder);
+    });
+
+    // sponsor ad (manual mode only — EthicalAds manages its own content)
+    const adLink = $('ad-link');
+    if (adLink && C.sponsor?.enabled && !(C.ethicalAds?.enabled && C.ethicalAds?.publisherId)) {
+      adLink.textContent = lang === 'en'
+        ? (C.sponsor.text_en || C.sponsor.text_id)
+        : (C.sponsor.text_id || C.sponsor.text_en);
+      adLink.href = C.sponsor.link;
+    }
+
+    // donate
+    const dl = $('donate-link');
+    if (dl && C.donate?.enabled) {
+      dl.textContent = lang === 'en'
+        ? (C.donate.label_en || C.donate.label_id)
+        : (C.donate.label_id || C.donate.label_en);
+    }
+
+    const dd = $('donate-desc');
+    if (dd && C.donate?.enabled) {
+      dd.textContent = lang === 'en'
+        ? (C.donate.desc_en || C.donate.desc_id || '')
+        : (C.donate.desc_id || C.donate.desc_en || '');
+      dd.style.display = dd.textContent ? 'block' : 'none';
+    }
+
+    // ToS sections
+    const tosId = $('tos-id'), tosEn = $('tos-en');
+    if (tosId && tosEn) {
+      tosId.style.display = lang === 'id' ? 'block' : 'none';
+      tosEn.style.display = lang === 'en' ? 'block' : 'none';
+    }
+
+    // lang buttons
+    $('btn-id').classList.toggle('active', lang === 'id');
+    $('btn-en').classList.toggle('active', lang === 'en');
+
+    updateCounterLabels();
+
+    // live UI strings that may be showing
+    if ($('chat-sub').textContent) {
+      const sub = $('chat-sub').textContent;
+      if (sub && connectedState !== null) {
+        $('chat-sub').textContent = connectedState ? t('connectedSub') : t('disconnected');
+      }
+    }
+  }
+
+  function switchLang(l) {
+    lang = l;
+    try { localStorage.setItem('zk-lang', l); } catch {}
+    applyLang();
+  }
+
+  // ── state ─────────────────────────────────────────────────
+  let ws = null, pc = null, dc = null;
+  let myCode = null, isInitiator = false;
+  let typingTimeout = null, lastTypingSent = 0;
+  let sessionStart = null, sessionInterval = null;
+  let liveWatchId = null, liveTimeout = null;
+  let rxPhoto = null;
+  let connectedState = null;
+
+  // ── DOM variables ─────────────────────────────────────────
+  const landing    = $('landing');
+  const optsMain   = $('opts-main');
+  const optsWait   = $('opts-waiting');
   const statusArea = $('status-area');
-  const messagesEl = $('messages');
-  const msgInput = $('msg-input');
-  const connDot = $('conn-dot');
-  const chatSubtitle = $('chat-subtitle');
-  const typingEl = $('typing');
+  const chat       = $('chat');
+  const messages   = $('messages');
+  const msgInput   = $('msg-input');
+  const typingEl   = $('typing');
+  const connDot    = $('conn-dot');
+  const chatSub    = $('chat-sub');
+  const timerEl    = $('session-timer');
   const photoInput = $('photo-input');
 
   const SIGNAL_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/signal';
 
+  // ── config init ───────────────────────────────────────────
   function applyConfig() {
-    const sponsorSlot = $('sponsor-slot');
-    const sponsorLink = $('sponsor-link');
-    if (CONFIG.sponsor?.enabled && CONFIG.sponsor.link && CONFIG.sponsor.text) {
-      sponsorLink.textContent = CONFIG.sponsor.text;
-      sponsorLink.href = CONFIG.sponsor.link;
-      sponsorSlot.style.display = 'block';
+    const ea         = C.ethicalAds || {};
+    const adSlot     = $('ad-slot');
+    const eaSlot     = $('ea-slot');
+    const manualSlot = $('manual-slot');
+
+    if (ea.enabled && ea.publisherId) {
+      // Mode EthicalAds
+      if (eaSlot)    eaSlot.style.display     = 'flex';
+      if (manualSlot) manualSlot.style.display = 'none';
+      const eaCont = $('ea-container');
+      if (eaCont) eaCont.setAttribute('data-ea-type', ea.type || 'image');
+      loadEthicalAds(ea.publisherId);
+    } else if (C.sponsor?.enabled) {
+      // Mode manual sponsor
+      if (eaSlot)    eaSlot.style.display     = 'none';
+      if (manualSlot) manualSlot.style.display = 'block';
     } else {
-      sponsorSlot.style.display = 'none';
+      // Tidak ada iklan sama sekali
+      if (adSlot) adSlot.style.display = 'none';
     }
 
-    const donateLink = $('donate-link');
-    if (CONFIG.donate?.enabled && CONFIG.donate.link) {
-      donateLink.href = CONFIG.donate.link;
-      donateLink.target = '_blank';
-      donateLink.rel = 'noopener';
-      donateLink.style.display = 'inline-block';
-    } else {
-      donateLink.style.display = 'none';
-    }
+    const dl = $('donate-link');
+    if (C.donate?.enabled && C.donate.link) {
+      dl.href = C.donate.link; dl.target = '_blank'; dl.rel = 'noopener';
+    } else if (dl) { dl.style.display = 'none'; }
 
-    if (navigator.share) {
-      $('share-btn').classList.add('visible');
-    }
-
-    if (!CONFIG.premium?.enabled) {
-      const promo = document.querySelector('.premium-promo');
-      if (promo) promo.style.display = 'none';
-    }
+    if (navigator.share) $('share-btn').classList.add('show');
+    applyLang();
+    fetchCounter();
   }
 
-  function generateCode() {
-    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-    let out = '';
-    const arr = new Uint8Array(6);
-    crypto.getRandomValues(arr);
-    for (let i = 0; i < 6; i++) out += chars[arr[i] % chars.length];
-    return out;
-  }
+  // ── status ────────────────────────────────────────────────
+  function setStatus(html, cls) { statusArea.innerHTML = `<div class="status ${cls}">${html}</div>`; }
+  function clearStatus()        { statusArea.innerHTML = ''; }
 
-  function showStatus(text, type) {
-    statusArea.innerHTML = `<div class="status ${type}">${text}</div>`;
-  }
-  function clearStatus() { statusArea.innerHTML = ''; }
-
-  function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, (c) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
-  }
-
-  function nowTime() {
+  // ── message helpers ───────────────────────────────────────
+  function ts() {
     const d = new Date();
-    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+  function esc(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  function addMessage(text, who) {
-    const div = document.createElement('div');
-    div.className = 'msg ' + who;
-    if (who === 'system') {
-      div.textContent = text;
-    } else {
-      div.innerHTML = escapeHtml(text) + `<span class="msg-time">${nowTime()}</span>`;
-    }
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-    return div;
+  function addMsg(text, who) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + who;
+    if (who === 'sys') { d.textContent = text; }
+    else { d.innerHTML = esc(text) + `<span class="msg-time">${ts()}</span>`; }
+    messages.appendChild(d);
+    messages.scrollTop = messages.scrollHeight;
+    return d;
   }
 
-  function addPhotoMessage(dataUrl, who) {
-    const div = document.createElement('div');
-    div.className = 'msg ' + who;
+  function addPhotoMsg(dataUrl, who) {
+    const d = document.createElement('div'); d.className = 'msg ' + who;
     const img = document.createElement('img');
-    img.className = 'msg-photo';
-    img.src = dataUrl;
-    img.addEventListener('click', () => openPhotoViewer(dataUrl));
-    div.appendChild(img);
-    const time = document.createElement('span');
-    time.className = 'msg-time';
-    time.textContent = nowTime();
-    div.appendChild(time);
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-    return div;
+    img.className = 'msg-img'; img.src = dataUrl;
+    img.addEventListener('click', () => openViewer(dataUrl));
+    d.appendChild(img);
+    const tm = document.createElement('span'); tm.className = 'msg-time'; tm.textContent = ts();
+    d.appendChild(tm);
+    messages.appendChild(d); messages.scrollTop = messages.scrollHeight;
+    return d;
   }
 
-  function addPhotoLoadingMessage(who, totalChunks) {
-    const div = document.createElement('div');
-    div.className = 'msg ' + who;
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'msg-photo-loading';
-    loadingDiv.textContent = 'Memuat foto...';
-    div.appendChild(loadingDiv);
-    const progressDiv = document.createElement('div');
-    progressDiv.className = 'msg-photo-progress';
-    const progressBar = document.createElement('div');
-    progressBar.className = 'msg-photo-progress-bar';
-    progressBar.style.width = '0%';
-    progressDiv.appendChild(progressBar);
-    div.appendChild(progressDiv);
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-    return { div, progressBar };
+  function addPhotoLoading(who) {
+    const d = document.createElement('div'); d.className = 'msg ' + who;
+    const box = document.createElement('div'); box.className = 'msg-img-loading';
+    box.textContent = who === 'me' ? (lang === 'en' ? 'Sending...' : 'Mengirim...') : (lang === 'en' ? 'Loading photo...' : 'Memuat foto...');
+    const wrap = document.createElement('div'); wrap.className = 'progress-wrap';
+    const bar  = document.createElement('div'); bar.className  = 'progress-bar'; bar.style.width = '0%';
+    wrap.appendChild(bar); d.appendChild(box); d.appendChild(wrap);
+    messages.appendChild(d); messages.scrollTop = messages.scrollHeight;
+    return { el: d, bar };
   }
 
-  function addLocationMessage(lat, lng, who, label) {
-    const div = document.createElement('div');
-    div.className = 'msg ' + who;
-    const locDiv = document.createElement('div');
-    locDiv.className = 'msg-location';
-    locDiv.innerHTML = `
-      <div class="msg-location-icon">📍</div>
-      <div>
-        <div class="msg-location-text">${label || 'Lokasi dibagikan'}</div>
-        <div class="msg-location-coords">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
-      </div>
-    `;
-    locDiv.addEventListener('click', () => {
-      window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank', 'noopener');
-    });
-    div.appendChild(locDiv);
-    const time = document.createElement('span');
-    time.className = 'msg-time';
-    time.textContent = nowTime();
-    div.appendChild(time);
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-    return div;
+  function addLocMsg(lat, lng, who, label) {
+    const d = document.createElement('div'); d.className = 'msg ' + who;
+    const loc = document.createElement('div'); loc.className = 'msg-loc';
+    loc.innerHTML = `<span class="loc-icon">📍</span><div><div class="loc-label">${label}</div><div class="loc-coords">${lat.toFixed(5)}, ${lng.toFixed(5)}</div></div>`;
+    loc.addEventListener('click', () => window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank', 'noopener'));
+    const tm = document.createElement('span'); tm.className = 'msg-time'; tm.textContent = ts();
+    d.appendChild(loc); d.appendChild(tm);
+    messages.appendChild(d); messages.scrollTop = messages.scrollHeight;
+    return d;
   }
 
-  function addLiveTrackingMessage(who) {
-    const div = document.createElement('div');
-    div.className = 'msg ' + who;
-    const liveDiv = document.createElement('div');
-    liveDiv.className = 'msg-live-tracking';
-    liveDiv.innerHTML = `
-      <div class="live-dot"></div>
-      <div>
-        <div style="font-weight:600; font-size:13px;">🟢 Live tracking aktif</div>
-        <div class="msg-location-coords" id="live-coords-${Date.now()}">Menunggu lokasi...</div>
-      </div>
-    `;
-    div.appendChild(liveDiv);
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-    return { div, liveDiv };
+  function addLiveMsg(who) {
+    const d = document.createElement('div'); d.className = 'msg ' + who;
+    const live = document.createElement('div'); live.className = 'msg-live';
+    live.innerHTML = `<div class="live-dot"></div><div><div style="font-weight:600;font-size:13px;">${t('locLiveActive')}</div><div class="loc-coords">${t('locLiveWaiting')}</div></div>`;
+    const tm = document.createElement('span'); tm.className = 'msg-time'; tm.textContent = ts();
+    d.appendChild(live); d.appendChild(tm);
+    messages.appendChild(d); messages.scrollTop = messages.scrollHeight;
+    return { el: d, live };
   }
 
-  function openPhotoViewer(src) {
-    $('photo-viewer-img').src = src;
-    $('photo-viewer').classList.add('active');
+  // ── photo viewer ──────────────────────────────────────────
+  function openViewer(src) { $('pv-img').src = src; $('photo-viewer').classList.add('on'); }
+  function closeViewer()   { $('photo-viewer').classList.remove('on'); }
+
+  // ── session timer ─────────────────────────────────────────
+  function startTimer() {
+    sessionStart = Date.now(); timerEl.style.display = 'inline-block';
+    window._w10 = false; window._w1 = false;
+    sessionInterval = setInterval(tickTimer, 1000); tickTimer();
+  }
+  function tickTimer() {
+    const rem = SESSION_MS - (Date.now() - sessionStart);
+    if (rem <= 0) { expireSession(); return; }
+    const h = Math.floor(rem / 3600000), m = Math.floor((rem % 3600000) / 60000), s = Math.floor((rem % 60000) / 1000);
+    timerEl.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    timerEl.className = 'timer' + (rem < 60000 ? ' crit' : rem < 600000 ? ' warn' : '');
+    if (rem < 600000 && !window._w10) { window._w10 = true; addMsg(t('sysWarn10'), 'sys'); }
+    if (rem < 60000  && !window._w1)  { window._w1  = true; addMsg(t('sysWarn1'),  'sys'); }
+  }
+  function stopTimer() {
+    clearInterval(sessionInterval); sessionInterval = null; sessionStart = null;
+    timerEl.style.display = 'none'; timerEl.className = 'timer';
+  }
+  function expireSession() {
+    stopTimer();
+    if (dc?.readyState === 'open') try { dc.send(JSON.stringify({type:'session-expired'})); } catch {}
+    alert(t('sysExpiredAlert'));
+    setTimeout(() => location.reload(), 500);
   }
 
-  function connectSignaling() {
-    return new Promise((resolve, reject) => {
+  // ── signaling ─────────────────────────────────────────────
+  function connectWS() {
+    return new Promise((res, rej) => {
       ws = new WebSocket(SIGNAL_URL);
-      ws.onopen = () => resolve();
-      ws.onerror = () => reject(new Error('Tidak bisa terhubung ke server'));
-      ws.onmessage = handleSignalMessage;
+      ws.onopen    = () => res();
+      ws.onerror   = () => rej(new Error(t('errConnect') + 'WebSocket error'));
+      ws.onmessage = onSignal;
     });
   }
+  function sig(obj) { if (ws?.readyState === 1) ws.send(JSON.stringify(obj)); }
 
-  function sendSignal(obj) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(obj));
-    }
-  }
-
-  async function handleSignalMessage(evt) {
-    let msg;
-    try { msg = JSON.parse(evt.data); } catch { return; }
-
-    switch (msg.type) {
+  async function onSignal(evt) {
+    let m; try { m = JSON.parse(evt.data); } catch { return; }
+    switch (m.type) {
+      case 'registered': break;
       case 'rate-limited':
-        showStatus(`⛔ IP anda di-suspend ${msg.remainingHours} jam karena terlalu banyak percobaan koneksi. Silakan coba lagi nanti.`, 'error');
-        resetToLanding();
-        break;
-
-      case 'registered':
-        isPremium = !!msg.isPremium;
-        break;
-
+        setStatus(`${t('rateLimited')} ${m.remainingHours} ${t('rateLimitedHours')}`, 's-error');
+        resetLanding(); break;
       case 'code-taken':
-        showStatus('Kode sudah digunakan. Coba lagi.', 'error');
-        resetToLanding();
-        break;
-
+        setStatus(t('errCodeTaken'), 's-error'); resetLanding(); break;
       case 'code-not-found':
-        showStatus('Kode tidak ditemukan atau sudah expired.', 'error');
-        resetToLanding();
-        break;
-
-      case 'join-success':
-        isPremium = !!msg.isPremium;
-        break;
-
+        setStatus(t('errCodeNotFound'), 's-error'); resetLanding(); break;
       case 'peer-joined':
-        isPremium = !!msg.isPremium;
-        await createPeerConnection();
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        sendSignal({ type: 'offer', sdp: offer });
-        break;
-
+        await makePeer();
+        const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+        sig({type:'offer', sdp:offer}); break;
       case 'offer':
-        await createPeerConnection();
-        await pc.setRemoteDescription(msg.sdp);
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        sendSignal({ type: 'answer', sdp: answer });
-        break;
-
+        await makePeer(); await pc.setRemoteDescription(m.sdp);
+        const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
+        sig({type:'answer', sdp:ans}); break;
       case 'answer':
-        await pc.setRemoteDescription(msg.sdp);
-        break;
-
+        await pc.setRemoteDescription(m.sdp); break;
       case 'ice':
-        if (pc && msg.candidate) {
-          try { await pc.addIceCandidate(msg.candidate); } catch {}
-        }
-        break;
-
+        if (pc && m.candidate) try { await pc.addIceCandidate(m.candidate); } catch {} break;
       case 'peer-left':
-        handlePeerLeft();
-        break;
+        setStatus(t('errPeerLeft'), 's-error'); resetLanding(); break;
     }
   }
 
-  async function createPeerConnection() {
-    pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun.cloudflare.com:3478' }
-      ]
-    });
-
-    pc.onicecandidate = (e) => {
-      if (e.candidate) sendSignal({ type: 'ice', candidate: e.candidate });
-    };
-
+  // ── WebRTC ────────────────────────────────────────────────
+  async function makePeer() {
+    pc = new RTCPeerConnection({ iceServers: [
+      {urls:'stun:stun.l.google.com:19302'},
+      {urls:'stun:stun1.l.google.com:19302'},
+      {urls:'stun:stun.cloudflare.com:3478'},
+    ]});
+    pc.onicecandidate = e => { if (e.candidate) sig({type:'ice', candidate:e.candidate}); };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'connected') {
-        updateConnUI(true);
-      } else if (pc.connectionState === 'disconnected') {
-        // Disconnected adalah state sementara, bisa pulih sendiri.
-        // Browser kadang trigger ini saat tab di background.
-        updateConnUI(false);
-        chatSubtitle.textContent = 'Reconnecting...';
-      } else if (pc.connectionState === 'failed') {
-        // Failed adalah disconnect permanen
-        updateConnUI(false);
-      }
+      if      (pc.connectionState === 'connected')    setConn(true);
+      else if (pc.connectionState === 'disconnected') { setConn(false); chatSub.textContent = t('reconnecting'); }
+      else if (pc.connectionState === 'failed')       setConn(false);
     };
-
-    // Tangani ICE state secara terpisah - ini lebih granular
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'disconnected') {
-        // Coba ICE restart setelah 3 detik kalau masih disconnected
-        setTimeout(() => {
-          if (pc && pc.iceConnectionState === 'disconnected') {
-            try { pc.restartIce(); } catch {}
-          }
-        }, 3000);
-      }
+      if (pc.iceConnectionState === 'disconnected')
+        setTimeout(() => { if (pc?.iceConnectionState === 'disconnected') try { pc.restartIce(); } catch {} }, 3000);
     };
-
-    if (isInitiator) {
-      dc = pc.createDataChannel('chat', { ordered: true });
-      setupDataChannel(dc);
-    } else {
-      pc.ondatachannel = (e) => {
-        dc = e.channel;
-        setupDataChannel(dc);
-      };
-    }
+    if (isInitiator) { dc = pc.createDataChannel('chat', {ordered:true}); setupDC(dc); }
+    else { pc.ondatachannel = e => { dc = e.channel; setupDC(dc); }; }
   }
 
-  function setupDataChannel(channel) {
-    channel.binaryType = 'arraybuffer';
-    channel.onopen = () => {
+  function setupDC(ch) {
+    ch.onopen = () => {
       if (ws) { try { ws.close(); } catch {} ws = null; }
-      showChatScreen();
-      const premiumNote = isPremium ? ' • Premium aktif ⭐' : '';
-      addMessage('Koneksi peer-to-peer aman tersambung. Pesan tidak melewati server.' + premiumNote, 'system');
-      addMessage('Sesi maksimal 12 jam. Pindah tab atau minimize aman — hanya tutup tab yang akan mengakhiri sesi.', 'system');
-      updatePremiumUI();
-      startSessionTimer();
+      showChat();
+      addMsg(t('sysConnected'), 'sys');
+      addMsg(t('sysTabSafe'),   'sys');
+      startTimer();
     };
-
-    channel.onmessage = (e) => {
-      let data;
-      try { data = JSON.parse(e.data); } catch { return; }
-      handleDataMessage(data);
-    };
-
-    channel.onclose = () => {
-      updateConnUI(false);
-      addMessage('Koneksi terputus.', 'system');
-      stopLiveTracking();
-    };
+    ch.onmessage = e => { let d; try { d = JSON.parse(e.data); } catch { return; } handleData(d); };
+    ch.onclose   = () => { setConn(false); addMsg(t('sysDisconn'), 'sys'); stopLive(); };
   }
 
-  function handleDataMessage(data) {
-    switch (data.type) {
+  // ── incoming data ─────────────────────────────────────────
+  function handleData(d) {
+    switch (d.type) {
       case 'msg':
-        addMessage(data.text, 'them');
-        typingEl.textContent = '';
-        try { navigator.vibrate?.(30); } catch {}
-        break;
-
+        addMsg(d.text, 'them'); typingEl.textContent = '';
+        try { navigator.vibrate?.(30); } catch {} break;
       case 'typing':
-        if (CONFIG.features?.showTypingIndicator === false) return;
-        typingEl.textContent = 'Lawan bicara sedang mengetik...';
+        if (F.showTypingIndicator === false) break;
+        typingEl.textContent = t('sysTyping');
         clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => { typingEl.textContent = ''; }, 2500);
-        break;
-
+        typingTimeout = setTimeout(() => { typingEl.textContent = ''; }, 2500); break;
       case 'photo-start':
-        receivingPhoto = {
-          chunks: [],
-          totalChunks: data.totalChunks,
-          mimeType: data.mimeType,
-          ui: addPhotoLoadingMessage('them', data.totalChunks)
-        };
-        break;
-
+        rxPhoto = { chunks:[], total:d.total, mime:d.mime, ui:addPhotoLoading('them') }; break;
       case 'photo-chunk':
-        if (!receivingPhoto) return;
-        receivingPhoto.chunks[data.index] = data.data;
-        const percent = Math.round((receivingPhoto.chunks.filter(Boolean).length / receivingPhoto.totalChunks) * 100);
-        if (receivingPhoto.ui?.progressBar) {
-          receivingPhoto.ui.progressBar.style.width = percent + '%';
-        }
-        break;
-
+        if (!rxPhoto) break;
+        rxPhoto.chunks[d.i] = d.data;
+        rxPhoto.ui.bar.style.width = Math.round(rxPhoto.chunks.filter(Boolean).length / rxPhoto.total * 100) + '%'; break;
       case 'photo-end':
-        if (!receivingPhoto) return;
-        const allChunks = receivingPhoto.chunks.join('');
-        const dataUrl = `data:${receivingPhoto.mimeType};base64,${allChunks}`;
-        const oldDiv = receivingPhoto.ui.div;
-        const newDiv = addPhotoMessage(dataUrl, 'them');
-        oldDiv.replaceWith(newDiv);
-        receivingPhoto = null;
-        try { navigator.vibrate?.(30); } catch {}
-        break;
-
-      case 'location':
-        addLocationMessage(data.lat, data.lng, 'them', 'Lokasi dibagikan');
-        try { navigator.vibrate?.(30); } catch {}
-        break;
-
+        if (!rxPhoto) break;
+        const url = `data:${rxPhoto.mime};base64,${rxPhoto.chunks.join('')}`;
+        rxPhoto.ui.el.replaceWith(addPhotoMsg(url, 'them'));
+        rxPhoto = null;
+        try { navigator.vibrate?.(30); } catch {} break;
+      case 'loc':
+        addLocMsg(d.lat, d.lng, 'them', t('locShared'));
+        try { navigator.vibrate?.(30); } catch {} break;
       case 'live-start':
-        window.peerLiveUI = addLiveTrackingMessage('them');
-        addMessage(`Lawan bicara mulai live tracking selama ${data.duration} menit`, 'system');
-        break;
-
+        window.peerLive = addLiveMsg('them');
+        addMsg(t('sysLiveStarted'), 'sys'); break;
       case 'live-update':
-        if (window.peerLiveUI) {
-          const coordsEl = window.peerLiveUI.liveDiv.querySelector('.msg-location-coords');
-          if (coordsEl) {
-            coordsEl.innerHTML = `<a href="https://www.google.com/maps?q=${data.lat},${data.lng}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">${data.lat.toFixed(5)}, ${data.lng.toFixed(5)}</a>`;
-          }
-        }
-        break;
-
+        if (window.peerLive) {
+          const ce = window.peerLive.live.querySelector('.loc-coords');
+          if (ce) ce.innerHTML = `<a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" rel="noopener" style="color:inherit">${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}</a>`;
+        } break;
       case 'live-end':
-        if (window.peerLiveUI) {
-          const liveDot = window.peerLiveUI.liveDiv.querySelector('.live-dot');
-          if (liveDot) {
-            liveDot.style.background = 'var(--text-dim)';
-            liveDot.style.boxShadow = 'none';
-            liveDot.style.animation = 'none';
-          }
-          const titleEl = window.peerLiveUI.liveDiv.querySelector('div > div');
-          if (titleEl) titleEl.textContent = '⚫ Live tracking berakhir';
-          window.peerLiveUI = null;
-        }
-        break;
-
+        if (window.peerLive) {
+          const dot = window.peerLive.live.querySelector('.live-dot');
+          if (dot) { dot.style.cssText = 'background:var(--dim);box-shadow:none;animation:none'; }
+          const ttl = window.peerLive.live.querySelector('[style]');
+          if (ttl) ttl.textContent = t('sysLiveEnded');
+          window.peerLive = null;
+        } break;
       case 'leave':
-        addMessage('Lawan bicara telah keluar.', 'system');
-        updateConnUI(false);
-        stopLiveTracking();
-        break;
-
+        addMsg(t('sysLeft'), 'sys'); setConn(false); stopLive(); break;
       case 'session-expired':
-        addMessage('Lawan bicara mencapai batas sesi 12 jam. Halaman akan reload.', 'system');
-        setTimeout(() => location.reload(), 2000);
-        break;
+        addMsg(t('sysExpiredPeer'), 'sys');
+        setTimeout(() => location.reload(), 2000); break;
     }
   }
 
-  function updatePremiumUI() {
-    const photoBtn = $('photo-btn');
-    const locationBtn = $('location-btn');
-    if (isPremium) {
-      photoBtn.classList.remove('premium-locked');
-      locationBtn.classList.remove('premium-locked');
-      $('chat-premium-tag').style.display = 'inline-block';
-    } else {
-      photoBtn.classList.add('premium-locked');
-      locationBtn.classList.add('premium-locked');
-      $('chat-premium-tag').style.display = 'none';
-    }
+  // ── UI ────────────────────────────────────────────────────
+  function setConn(ok) {
+    connectedState = ok;
+    connDot.classList.toggle('off', !ok);
+    chatSub.textContent = ok ? t('connectedSub') : t('disconnected');
   }
 
-  function updateConnUI(connected) {
-    if (connected) {
-      connDot.classList.remove('disconnected');
-      chatSubtitle.textContent = 'Terhubung • End-to-end encrypted';
-    } else {
-      connDot.classList.add('disconnected');
-      chatSubtitle.textContent = 'Terputus';
-    }
-  }
-
-  function showChatScreen() {
-    landing.style.display = 'none';
-    chatScreen.classList.add('active');
+  function showChat() {
+    landing.style.display = 'none'; chat.classList.add('on');
     setTimeout(() => msgInput.focus(), 100);
   }
 
-  function startSessionTimer() {
-    sessionStartTime = Date.now();
-    const timerEl = $('session-timer');
-    if (timerEl) timerEl.style.display = 'inline-block';
-    updateSessionTimer();
-    sessionTimerInterval = setInterval(updateSessionTimer, 1000);
+  function resetLanding() {
+    stopTimer(); stopLive(); connectedState = null;
+    if (dc)  { try { dc.close();  } catch {} dc  = null; }
+    if (pc)  { try { pc.close();  } catch {} pc  = null; }
+    if (ws)  { try { ws.close();  } catch {} ws  = null; }
+    myCode = null; isInitiator = false; rxPhoto = null;
+    optsWait.style.display = 'none'; optsMain.style.display = 'block';
+    chat.classList.remove('on'); landing.style.display = 'flex';
+    messages.innerHTML = ''; msgInput.value = ''; msgInput.style.height = 'auto';
+    typingEl.textContent = ''; $('join-input').value = '';
   }
 
-  function updateSessionTimer() {
-    if (!sessionStartTime) return;
-    const elapsed = Date.now() - sessionStartTime;
-    const remaining = SESSION_MAX_DURATION_MS - elapsed;
-
-    if (remaining <= 0) {
-      handleSessionExpired();
-      return;
-    }
-
-    const hours = Math.floor(remaining / (60 * 60 * 1000));
-    const mins = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
-    const secs = Math.floor((remaining % (60 * 1000)) / 1000);
-    const formatted = `${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
-
-    const timerEl = $('session-timer');
-    if (timerEl) {
-      timerEl.textContent = formatted;
-      if (remaining < 10 * 60 * 1000) {
-        timerEl.style.color = 'var(--danger)';
-        timerEl.style.borderColor = 'var(--danger)';
-      } else if (remaining < 60 * 60 * 1000) {
-        timerEl.style.color = 'var(--gold)';
-        timerEl.style.borderColor = 'rgba(251,191,36,0.5)';
-      }
-    }
-
-    if (remaining < 10 * 60 * 1000 && !window._warned10min) {
-      window._warned10min = true;
-      addMessage('⚠️ Sesi akan berakhir dalam 10 menit. Halaman akan auto-reload.', 'system');
-    }
-    if (remaining < 60 * 1000 && !window._warned1min) {
-      window._warned1min = true;
-      addMessage('⚠️ Sesi berakhir dalam 1 menit!', 'system');
-    }
+  // ── generate / join ───────────────────────────────────────
+  function genCode() {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', arr = new Uint8Array(6);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, b => chars[b % chars.length]).join('');
   }
 
-  function stopSessionTimer() {
-    if (sessionTimerInterval) {
-      clearInterval(sessionTimerInterval);
-      sessionTimerInterval = null;
-    }
-    sessionStartTime = null;
-    window._warned10min = false;
-    window._warned1min = false;
-    const timerEl = $('session-timer');
-    if (timerEl) {
-      timerEl.style.display = 'none';
-      timerEl.style.color = '';
-      timerEl.style.borderColor = '';
-    }
+  async function startSession() {
+    myCode = genCode(); isInitiator = true;
+    $('code-display').textContent = myCode;
+    optsMain.style.display = 'none'; optsWait.style.display = 'block'; clearStatus();
+    try { await connectWS(); sig({type:'register', code:myCode}); }
+    catch (err) { setStatus(t('errConnect') + err.message, 's-error'); resetLanding(); }
   }
 
-  function handleSessionExpired() {
-    stopSessionTimer();
-    if (dc?.readyState === 'open') {
-      try { dc.send(JSON.stringify({ type: 'session-expired' })); } catch {}
-    }
-    alert('Sesi 12 jam telah berakhir. Halaman akan reload otomatis.');
-    setTimeout(() => {
-      location.reload();
-    }, 500);
-  }
-
-  function resetToLanding() {
-    stopSessionTimer();
-    stopLiveTracking();
-    if (dc) { try { dc.close(); } catch {} dc = null; }
-    if (pc) { try { pc.close(); } catch {} pc = null; }
-    if (ws) { try { ws.close(); } catch {} ws = null; }
-    if (paymentCheckInterval) { clearInterval(paymentCheckInterval); paymentCheckInterval = null; }
-    myCode = null;
-    isInitiator = false;
-    isPremium = false;
-    premiumToken = null;
-    currentOrderId = null;
-    receivingPhoto = null;
-    codeShown.style.display = 'none';
-    initialOpts.style.display = 'block';
-    landing.style.display = 'flex';
-    chatScreen.classList.remove('active');
-    messagesEl.innerHTML = '';
-    msgInput.value = '';
-    msgInput.style.height = 'auto';
-    typingEl.textContent = '';
-    $('join-code').value = '';
-    $('premium-badge').style.display = 'none';
-  }
-
-  function handlePeerLeft() {
-    showStatus('Pengguna lain membatalkan. Coba kode lain.', 'error');
-    resetToLanding();
-  }
-
-  async function generateAndWait(premium = false) {
-    myCode = generateCode();
-    isInitiator = true;
-    isPremium = premium;
-    $('my-code').textContent = myCode;
-    $('premium-badge').style.display = premium ? 'inline-block' : 'none';
-    initialOpts.style.display = 'none';
-    codeShown.style.display = 'block';
-    clearStatus();
-    try {
-      await connectSignaling();
-      sendSignal({
-        type: 'register',
-        code: myCode,
-        premiumToken: premium ? premiumToken : null
-      });
-    } catch (err) {
-      showStatus('Gagal terhubung: ' + err.message, 'error');
-      resetToLanding();
-    }
-  }
-
-  async function startPremiumPayment() {
-    try {
-      $('premium-pay-btn').disabled = true;
-      $('premium-pay-btn').textContent = 'Membuat link...';
-
-      const res = await fetch('/api/payment/create', { method: 'POST' });
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (data.suspended) {
-          alert(`⛔ IP anda di-suspend ${data.remainingHours} jam karena terlalu banyak percobaan. Silakan coba lagi nanti.`);
-        } else if (data.error === 'payment_not_configured') {
-          alert('Payment belum dikonfigurasi oleh admin server. Hubungi pengelola.');
-        } else {
-          alert('Gagal membuat link pembayaran: ' + (data.message || 'Unknown error'));
-        }
-        $('premium-pay-btn').disabled = false;
-        $('premium-pay-btn').textContent = 'Bayar dengan QRIS';
-        return;
-      }
-
-      currentOrderId = data.orderId;
-      window.open(data.paymentUrl, '_blank');
-      $('premium-modal').classList.remove('active');
-      showStatus('Selesaikan pembayaran QRIS di tab baru. Scan QR code dengan e-wallet anda (GoPay/OVO/Dana/dll). Halaman ini akan otomatis update setelah berhasil...', 'waiting');
-
-      paymentCheckInterval = setInterval(checkPaymentStatus, 3000);
-
-      setTimeout(() => {
-        if (paymentCheckInterval) {
-          clearInterval(paymentCheckInterval);
-          paymentCheckInterval = null;
-          showStatus('Pembayaran timeout. Coba lagi jika sudah bayar.', 'error');
-        }
-      }, 15 * 60 * 1000);
-
-      $('premium-pay-btn').disabled = false;
-      $('premium-pay-btn').textContent = 'Bayar dengan QRIS';
-    } catch (err) {
-      alert('Error: ' + err.message);
-      $('premium-pay-btn').disabled = false;
-      $('premium-pay-btn').textContent = 'Bayar dengan QRIS';
-    }
-  }
-
-  async function checkPaymentStatus() {
-    if (!currentOrderId) return;
-    try {
-      const res = await fetch(`/api/payment/check/${currentOrderId}`);
-      const data = await res.json();
-
-      if (data.status === 'paid' && data.token) {
-        clearInterval(paymentCheckInterval);
-        paymentCheckInterval = null;
-        premiumToken = data.token;
-        showStatus('✓ Pembayaran berhasil! Membuat sesi premium...', 'success');
-        setTimeout(() => {
-          clearStatus();
-          generateAndWait(true);
-        }, 1000);
-      } else if (data.status === 'failed') {
-        clearInterval(paymentCheckInterval);
-        paymentCheckInterval = null;
-        showStatus('Pembayaran gagal. Coba lagi.', 'error');
-      }
-    } catch {}
-  }
-
-  async function joinWithCode(code) {
+  async function joinSession(code) {
     code = code.toUpperCase().trim();
-    if (code.length !== 6) {
-      showStatus('Kode harus 6 karakter.', 'error');
-      return;
-    }
-    myCode = code;
-    isInitiator = false;
-    clearStatus();
-    showStatus('Menghubungkan...', 'info');
-    try {
-      await connectSignaling();
-      sendSignal({ type: 'join', code });
-    } catch (err) {
-      showStatus('Gagal terhubung: ' + err.message, 'error');
-    }
+    if (code.length !== 6) { setStatus(t('errCodeLength'), 's-error'); return; }
+    myCode = code; isInitiator = false; clearStatus();
+    setStatus(t('connecting'), 's-info');
+    try { await connectWS(); sig({type:'join', code}); }
+    catch (err) { setStatus(t('errConnect') + err.message, 's-error'); }
   }
 
-  function sendMessage() {
+  // ── send ──────────────────────────────────────────────────
+  function sendMsg() {
     const text = msgInput.value.trim();
-    if (!text || !dc || dc.readyState !== 'open') return;
-    const maxLen = CONFIG.features?.maxMessageLength || 4000;
-    if (text.length > maxLen) {
-      addMessage(`Pesan terlalu panjang (max ${maxLen} karakter)`, 'system');
-      return;
-    }
-    dc.send(JSON.stringify({ type: 'msg', text }));
-    addMessage(text, 'me');
-    msgInput.value = '';
-    msgInput.style.height = 'auto';
-    msgInput.focus();
+    if (!text || dc?.readyState !== 'open') return;
+    if (text.length > (F.maxMessageLength || 4000)) { addMsg(t('sysMsgLong'), 'sys'); return; }
+    dc.send(JSON.stringify({type:'msg', text}));
+    addMsg(text, 'me'); msgInput.value = ''; msgInput.style.height = 'auto'; msgInput.focus();
   }
 
   function sendTyping() {
-    if (!dc || dc.readyState !== 'open') return;
-    if (CONFIG.features?.showTypingIndicator === false) return;
+    if (dc?.readyState !== 'open' || F.showTypingIndicator === false) return;
     const now = Date.now();
     if (now - lastTypingSent < 1500) return;
-    lastTypingSent = now;
-    dc.send(JSON.stringify({ type: 'typing' }));
+    lastTypingSent = now; dc.send(JSON.stringify({type:'typing'}));
   }
 
-  async function compressImage(file, maxWidth = 1280, quality = 0.82) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const reader = new FileReader();
-      reader.onload = (e) => {
+  // ── photo ─────────────────────────────────────────────────
+  async function compressImg(file, maxW = 1280, q = 0.82) {
+    return new Promise((res, rej) => {
+      const img = new Image(), r = new FileReader();
+      r.onload = e => {
         img.onload = () => {
-          let { width, height } = img;
-          if (width > maxWidth) {
-            height = (height * maxWidth) / width;
-            width = maxWidth;
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob((blob) => resolve(blob), 'image/jpeg', quality);
+          let {width:w, height:h} = img;
+          if (w > maxW) { h = h * maxW / w; w = maxW; }
+          const c = document.createElement('canvas'); c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          c.toBlob(res, 'image/jpeg', q);
         };
-        img.onerror = reject;
-        img.src = e.target.result;
+        img.onerror = rej; img.src = e.target.result;
       };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+      r.onerror = rej; r.readAsDataURL(file);
     });
   }
 
-  function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result;
-        const base64 = dataUrl.split(',')[1];
-        resolve({ base64, dataUrl });
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
+  function b64(blob) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => { const [, b] = r.result.split(','); res({b64:b, dataUrl:r.result}); };
+      r.onerror = rej; r.readAsDataURL(blob);
     });
   }
 
-  async function handlePhotoSelect(file) {
-    if (!isPremium) {
-      $('premium-modal').classList.add('active');
-      return;
-    }
-    if (!dc || dc.readyState !== 'open') return;
-    if (!file.type.startsWith('image/')) {
-      addMessage('File harus berupa gambar', 'system');
-      return;
-    }
-
-    addMessage('Mengompres foto...', 'system');
+  async function sendPhoto(file) {
+    if (!file.type.startsWith('image/')) { addMsg(t('sysPhotoType'), 'sys'); return; }
+    if (dc?.readyState !== 'open') return;
+    addMsg(t('sysCompressing'), 'sys');
     try {
-      const blob = await compressImage(file);
-      if (blob.size > MAX_PHOTO_SIZE) {
-        addMessage(`Foto terlalu besar setelah dikompres (max ${MAX_PHOTO_SIZE / 1024 / 1024}MB)`, 'system');
-        return;
+      const blob = await compressImg(file);
+      if (blob.size > MAX_PHOTO) { addMsg(t('sysPhotoBig'), 'sys'); return; }
+      const {b64:b, dataUrl} = await b64(blob);
+      const total = Math.ceil(b.length / CHUNK);
+      dc.send(JSON.stringify({type:'photo-start', total, mime:'image/jpeg'}));
+      const ui = addPhotoLoading('me');
+      for (let i = 0; i < total; i++) {
+        while (dc.bufferedAmount > 1024 * 1024) await new Promise(r => setTimeout(r, 50));
+        dc.send(JSON.stringify({type:'photo-chunk', i, data:b.slice(i*CHUNK, (i+1)*CHUNK)}));
+        ui.bar.style.width = Math.round((i+1)/total*100) + '%';
       }
-      const { base64, dataUrl } = await blobToBase64(blob);
-      const totalChunks = Math.ceil(base64.length / PHOTO_CHUNK_SIZE);
-
-      dc.send(JSON.stringify({
-        type: 'photo-start',
-        totalChunks,
-        mimeType: 'image/jpeg'
-      }));
-
-      const myLoadingUI = addPhotoLoadingMessage('me', totalChunks);
-
-      for (let i = 0; i < totalChunks; i++) {
-        const chunk = base64.slice(i * PHOTO_CHUNK_SIZE, (i + 1) * PHOTO_CHUNK_SIZE);
-        while (dc.bufferedAmount > 1024 * 1024) {
-          await new Promise(r => setTimeout(r, 50));
-        }
-        dc.send(JSON.stringify({
-          type: 'photo-chunk',
-          index: i,
-          data: chunk
-        }));
-        const percent = Math.round(((i + 1) / totalChunks) * 100);
-        myLoadingUI.progressBar.style.width = percent + '%';
-      }
-
-      dc.send(JSON.stringify({ type: 'photo-end' }));
-
-      const newDiv = addPhotoMessage(dataUrl, 'me');
-      myLoadingUI.div.replaceWith(newDiv);
-    } catch (err) {
-      addMessage('Gagal mengirim foto: ' + err.message, 'system');
-    }
+      dc.send(JSON.stringify({type:'photo-end'}));
+      ui.el.replaceWith(addPhotoMsg(dataUrl, 'me'));
+    } catch (err) { addMsg(t('sysPhotoFail') + err.message, 'sys'); }
   }
 
-  function sendLocationPin() {
-    if (!isPremium) {
-      $('premium-modal').classList.add('active');
-      return;
-    }
-    if (!navigator.geolocation) {
-      addMessage('Browser anda tidak mendukung GPS', 'system');
-      return;
-    }
-    $('location-modal').classList.remove('active');
-    addMessage('Mengambil lokasi...', 'system');
+  // ── location ──────────────────────────────────────────────
+  function sendPin() {
+    $('loc-modal').classList.remove('on');
+    if (!navigator.geolocation) { addMsg(t('sysGPSUnsupported'), 'sys'); return; }
+    addMsg(t('sysGettingLoc'), 'sys');
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        dc.send(JSON.stringify({ type: 'location', lat: latitude, lng: longitude }));
-        addLocationMessage(latitude, longitude, 'me', 'Lokasi anda');
+      pos => {
+        const {latitude:lat, longitude:lng} = pos.coords;
+        dc.send(JSON.stringify({type:'loc', lat, lng}));
+        addLocMsg(lat, lng, 'me', t('locYours'));
       },
-      (err) => {
-        addMessage('Gagal ambil lokasi: ' + err.message, 'system');
-      },
-      { enableHighAccuracy: true, timeout: 15000 }
+      err => addMsg(t('sysLocFail') + err.message, 'sys'),
+      {enableHighAccuracy:true, timeout:15000}
     );
   }
 
-  function startLiveTracking() {
-    if (!isPremium) {
-      $('premium-modal').classList.add('active');
-      return;
-    }
-    if (!navigator.geolocation) {
-      addMessage('Browser anda tidak mendukung GPS', 'system');
-      return;
-    }
-    if (liveTrackingWatchId !== null) {
-      addMessage('Live tracking sudah aktif', 'system');
-      return;
-    }
-
-    $('location-modal').classList.remove('active');
-    const duration = 5;
-    dc.send(JSON.stringify({ type: 'live-start', duration }));
-    const myUI = addLiveTrackingMessage('me');
-    window.myLiveUI = myUI;
-
-    liveTrackingWatchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        dc.send(JSON.stringify({ type: 'live-update', lat: latitude, lng: longitude }));
-        if (myUI?.liveDiv) {
-          const coordsEl = myUI.liveDiv.querySelector('.msg-location-coords');
-          if (coordsEl) coordsEl.textContent = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-        }
+  function startLive() {
+    $('loc-modal').classList.remove('on');
+    if (!navigator.geolocation) { addMsg(t('sysGPSUnsupported'), 'sys'); return; }
+    if (liveWatchId !== null) { addMsg(t('sysLiveActive'), 'sys'); return; }
+    const dur = 5;
+    dc.send(JSON.stringify({type:'live-start', dur}));
+    const myLive = addLiveMsg('me'); window.myLive = myLive;
+    liveWatchId = navigator.geolocation.watchPosition(
+      pos => {
+        const {latitude:lat, longitude:lng} = pos.coords;
+        dc.send(JSON.stringify({type:'live-update', lat, lng}));
+        const ce = myLive.live.querySelector('.loc-coords');
+        if (ce) ce.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
       },
-      (err) => {
-        addMessage('Error tracking: ' + err.message, 'system');
-        stopLiveTracking();
-      },
-      { enableHighAccuracy: true, maximumAge: 5000 }
+      err => { addMsg(t('sysLiveError') + err.message, 'sys'); stopLive(); },
+      {enableHighAccuracy:true, maximumAge:5000}
     );
-
-    liveTrackingTimeout = setTimeout(() => {
-      stopLiveTracking();
-    }, duration * 60 * 1000);
+    liveTimeout = setTimeout(stopLive, dur * 60000);
   }
 
-  function stopLiveTracking() {
-    if (liveTrackingWatchId !== null) {
-      navigator.geolocation.clearWatch(liveTrackingWatchId);
-      liveTrackingWatchId = null;
-    }
-    if (liveTrackingTimeout) {
-      clearTimeout(liveTrackingTimeout);
-      liveTrackingTimeout = null;
-    }
-    if (dc?.readyState === 'open') {
-      try { dc.send(JSON.stringify({ type: 'live-end' })); } catch {}
-    }
-    if (window.myLiveUI?.liveDiv) {
-      const liveDot = window.myLiveUI.liveDiv.querySelector('.live-dot');
-      if (liveDot) {
-        liveDot.style.background = 'var(--text-dim)';
-        liveDot.style.boxShadow = 'none';
-        liveDot.style.animation = 'none';
-      }
-      const titleEl = window.myLiveUI.liveDiv.querySelector('div > div');
-      if (titleEl) titleEl.textContent = '⚫ Live tracking berakhir';
-      window.myLiveUI = null;
+  function stopLive() {
+    if (liveWatchId !== null) { navigator.geolocation.clearWatch(liveWatchId); liveWatchId = null; }
+    if (liveTimeout)          { clearTimeout(liveTimeout); liveTimeout = null; }
+    if (dc?.readyState === 'open') try { dc.send(JSON.stringify({type:'live-end'})); } catch {}
+    if (window.myLive) {
+      const dot = window.myLive.live.querySelector('.live-dot');
+      if (dot) dot.style.cssText = 'background:var(--dim);box-shadow:none;animation:none';
+      window.myLive = null;
     }
   }
 
-  function leaveChat() {
-    if (!confirm('Keluar dari chat? Semua pesan akan hilang permanen.')) return;
-    if (dc?.readyState === 'open') {
-      try { dc.send(JSON.stringify({ type: 'leave' })); } catch {}
-    }
-    stopLiveTracking();
-    resetToLanding();
+  // ── share ─────────────────────────────────────────────────
+  function getShareLink() {
+    return `${location.origin}${location.pathname}?code=${myCode}`;
+  }
+
+  function showToast(msg, duration = 2200) {
+    const el = $('toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), duration);
   }
 
   async function shareCode() {
-    if (!navigator.share) return;
     try {
       await navigator.share({
         title: 'ZK Chat',
-        text: `Join private chat saya dengan kode: ${myCode}`,
-        url: location.origin
+        text: lang === 'en' ? `My ZK Chat code: ${myCode}` : `Kode ZK Chat saya: ${myCode}`,
+        url: getShareLink()
       });
     } catch {}
   }
 
-  $('generate-btn').addEventListener('click', () => generateAndWait(false));
+  // ── URL param: auto-join if ?code=XXXXXX present ─────────
+  function checkUrlCode() {
+    const params = new URLSearchParams(location.search);
+    const code   = params.get('code');
+    if (code && /^[A-Z0-9]{6}$/i.test(code)) {
+      // Bersihkan URL supaya tidak reload dengan code lagi
+      window.history.replaceState({}, '', location.pathname);
+      // Pre-fill dan langsung join
+      $('join-input').value = code.toUpperCase();
+      joinSession(code);
+    }
+  }
 
-  $('generate-premium-btn').addEventListener('click', () => {
-    $('premium-modal').classList.add('active');
-  });
+  // ── events ────────────────────────────────────────────────
+  $('btn-id').addEventListener('click', () => switchLang('id'));
+  $('btn-en').addEventListener('click', () => switchLang('en'));
 
-  $('premium-cancel-btn').addEventListener('click', () => {
-    $('premium-modal').classList.remove('active');
-  });
+  $('gen-btn').addEventListener('click', startSession);
+  $('join-btn').addEventListener('click', () => joinSession($('join-input').value));
+  $('join-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinSession(e.target.value); });
+  $('join-input').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); });
 
-  $('premium-pay-btn').addEventListener('click', startPremiumPayment);
-
-  $('join-btn').addEventListener('click', () => joinWithCode($('join-code').value));
-
-  $('join-code').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') joinWithCode(e.target.value);
-  });
-
-  $('join-code').addEventListener('input', (e) => {
-    e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  });
-
-  $('copy-btn').addEventListener('click', () => {
+  $('copy-code-btn').addEventListener('click', () => {
     navigator.clipboard.writeText(myCode).then(() => {
-      const btn = $('copy-btn');
-      const orig = btn.textContent;
-      btn.textContent = 'Tersalin ✓';
-      setTimeout(() => { btn.textContent = orig; }, 1500);
+      showToast(t('copied'));
+      const btn = $('copy-code-btn'); btn.textContent = t('copied');
+      setTimeout(() => { btn.textContent = t('copyBtn'); }, 1500);
     }).catch(() => {});
   });
 
+  $('copy-link-btn').addEventListener('click', () => {
+    const link = getShareLink();
+    navigator.clipboard.writeText(link).then(() => {
+      showToast('🔗 ' + t('copiedLink'));
+      const btn = $('copy-link-btn'); btn.textContent = t('copiedLink');
+      setTimeout(() => { btn.textContent = t('copyLinkBtn'); }, 1500);
+    }).catch(() => {
+      // Fallback: select manually
+      const tmp = document.createElement('input');
+      tmp.value = link; document.body.appendChild(tmp);
+      tmp.select(); document.execCommand('copy');
+      document.body.removeChild(tmp);
+      showToast('🔗 ' + t('copiedLink'));
+    });
+  });
   $('share-btn').addEventListener('click', shareCode);
-  $('cancel-btn').addEventListener('click', resetToLanding);
-  $('leave-btn').addEventListener('click', leaveChat);
-  $('send-btn').addEventListener('click', sendMessage);
-
-  $('photo-btn').addEventListener('click', () => {
-    if (!isPremium) {
-      $('premium-modal').classList.add('active');
-      return;
-    }
-    photoInput.click();
+  $('cancel-btn').addEventListener('click', resetLanding);
+  $('leave-btn').addEventListener('click', () => {
+    if (!confirm(t('confirmLeave'))) return;
+    if (dc?.readyState === 'open') try { dc.send(JSON.stringify({type:'leave'})); } catch {}
+    resetLanding();
   });
 
-  photoInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) handlePhotoSelect(file);
-    e.target.value = '';
-  });
-
-  $('location-btn').addEventListener('click', () => {
-    if (!isPremium) {
-      $('premium-modal').classList.add('active');
-      return;
-    }
-    $('location-modal').classList.add('active');
-  });
-
-  $('send-pin-btn').addEventListener('click', sendLocationPin);
-  $('send-live-btn').addEventListener('click', startLiveTracking);
-  $('location-cancel-btn').addEventListener('click', () => {
-    $('location-modal').classList.remove('active');
-  });
-
-  $('terms-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    $('terms-modal').classList.add('active');
-  });
-  $('terms-close-btn').addEventListener('click', () => {
-    $('terms-modal').classList.remove('active');
-  });
-
-  $('photo-viewer-close').addEventListener('click', () => {
-    $('photo-viewer').classList.remove('active');
-  });
-  $('photo-viewer').addEventListener('click', (e) => {
-    if (e.target.id === 'photo-viewer') {
-      $('photo-viewer').classList.remove('active');
-    }
-  });
-
-  msgInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  msgInput.addEventListener('input', (e) => {
+  $('send-btn').addEventListener('click', sendMsg);
+  msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); } });
+  msgInput.addEventListener('input', e => {
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
     sendTyping();
   });
 
-  window.addEventListener('beforeunload', () => {
-    if (dc?.readyState === 'open') {
-      try { dc.send(JSON.stringify({ type: 'leave' })); } catch {}
-    }
-    stopLiveTracking();
-  });
+  $('photo-btn').addEventListener('click', () => photoInput.click());
+  photoInput.addEventListener('change', e => { const f = e.target.files[0]; if (f) sendPhoto(f); e.target.value = ''; });
 
-  // Page Visibility API: pindah tab atau minimize TIDAK menutup session.
-  // Hanya tab close (beforeunload) yang menutup session.
-  // Handler ini hanya untuk reconnect attempt jika koneksi drop saat tab di background.
+  $('loc-btn').addEventListener('click', () => { if (dc?.readyState === 'open') $('loc-modal').classList.add('on'); });
+  $('loc-pin-btn').addEventListener('click', sendPin);
+  $('loc-live-btn').addEventListener('click', startLive);
+  $('loc-cancel-btn').addEventListener('click', () => $('loc-modal').classList.remove('on'));
+
+  $('tos-link').addEventListener('click', e => { e.preventDefault(); $('tos-modal').classList.add('on'); });
+  $('tos-close').addEventListener('click', () => $('tos-modal').classList.remove('on'));
+
+  $('pv-close').addEventListener('click', closeViewer);
+  $('photo-viewer').addEventListener('click', e => { if (e.target.id === 'photo-viewer') closeViewer(); });
+
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && pc) {
-      // Tab kembali ke foreground - cek apakah koneksi masih hidup
-      if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+    if (document.visibilityState === 'visible' && pc)
+      if (['disconnected','failed'].includes(pc.iceConnectionState))
         try { pc.restartIce(); } catch {}
-      }
-    }
   });
 
-  function checkUrlPayment() {
-    const params = new URLSearchParams(location.search);
-    if (params.get('payment') === 'success' && params.get('order_id')) {
-      currentOrderId = params.get('order_id');
-      showStatus('Memverifikasi pembayaran...', 'waiting');
-      paymentCheckInterval = setInterval(checkPaymentStatus, 2000);
-      window.history.replaceState({}, '', location.pathname);
-    }
-  }
+  window.addEventListener('beforeunload', () => {
+    if (dc?.readyState === 'open') try { dc.send(JSON.stringify({type:'leave'})); } catch {}
+    stopLive();
+  });
+
+  window.addEventListener('resize', () => {
+    if (chat.classList.contains('on')) setTimeout(() => { messages.scrollTop = messages.scrollHeight; }, 100);
+  });
 
   applyConfig();
-  checkUrlPayment();
-
+  checkUrlCode();
 })();
