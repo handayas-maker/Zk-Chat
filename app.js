@@ -612,64 +612,66 @@
   $('photo-viewer').addEventListener('click', e => { if (e.target.id === 'photo-viewer') closeViewer(); });
 
   // ── Mobile tab suspend handler ────────────────────────────
-  // Android/iOS suspend WebSocket saat user pindah app.
-  // Saat kembali ke browser, langsung reconnect dalam <3 detik.
+  // Saat user pindah tab/app:
+  // - Kirim sinyal "away" ke server → server perpanjang TTL kode jadi 20 detik
+  // - Saat kembali dalam 20 detik → reconnect + register ulang kode
+  // - Lebih dari 20 detik → kode hangus normal
 
   let _reconnectTimer = null;
+  let _hiddenAt = null;
+  const AWAY_GRACE_MS = 20000; // 20 detik toleransi
 
   function attemptReconnect() {
-    // Hanya reconnect kalau sedang di waiting screen (sudah punya kode tapi belum tersambung)
     if (!myCode || !isInitiator || dc) return;
-
-    // Kalau WebSocket masih hidup, tidak perlu reconnect
     if (ws && ws.readyState === WebSocket.OPEN) return;
 
-    // Tutup WS lama kalau ada
     if (ws) { try { ws.close(); } catch {} ws = null; }
 
-    // Update status agar user tahu sedang reconnect
     const waitingStatus = $('opts-waiting')?.querySelector('.status');
     if (waitingStatus) {
-      waitingStatus.textContent = lang === 'en'
-        ? 'Reconnecting...' : 'Menghubungkan kembali...';
+      waitingStatus.textContent = lang === 'en' ? 'Reconnecting...' : 'Menghubungkan kembali...';
       waitingStatus.className = 'status s-info';
     }
 
     connectWS()
       .then(() => {
         sig({ type: 'register', code: myCode });
-        // Restore status normal
         const s = $('opts-waiting')?.querySelector('.status');
-        if (s) {
-          s.textContent = t('waiting');
-          s.className = 'status s-wait';
-        }
+        if (s) { s.textContent = t('waiting'); s.className = 'status s-wait'; }
       })
       .catch(() => {
-        // Retry lagi 3 detik kemudian
         _reconnectTimer = setTimeout(attemptReconnect, 3000);
       });
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      // Clear any pending reconnect timer
+    if (document.visibilityState === 'hidden') {
+      _hiddenAt = Date.now();
       if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+
+      // Beritahu server bahwa initiator sedang away
+      // Server akan perpanjang TTL kode menjadi 20 detik
+      if (myCode && isInitiator && !dc) {
+        sig({ type: 'away', code: myCode });
+      }
+
+    } else {
+      const hiddenMs = _hiddenAt ? (Date.now() - _hiddenAt) : 0;
+      _hiddenAt = null;
 
       // Kalau sedang chat — reconnect ICE kalau perlu
       if (pc && ['disconnected','failed'].includes(pc.iceConnectionState))
         try { pc.restartIce(); } catch {}
 
-      // Kalau sedang waiting — reconnect WebSocket segera
-      // Delay 300ms untuk beri waktu OS resume network stack
-      setTimeout(attemptReconnect, 300);
-    } else {
-      // Tab tersembunyi — clear reconnect timer
-      if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+      // Kalau sedang waiting dan tersembunyi — reconnect
+      // (selama < 20 detik, server masih pegang kode)
+      if (myCode && isInitiator && !dc) {
+        setTimeout(attemptReconnect, 300);
+      }
     }
   });
 
-  // Heartbeat setiap 25 detik — mencegah WebSocket di-timeout proxy/firewall
+  // Heartbeat setiap 25 detik
   setInterval(() => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       try { ws.send(JSON.stringify({ type: 'ping' })); } catch {}

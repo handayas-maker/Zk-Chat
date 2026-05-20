@@ -98,7 +98,8 @@ const wss = new WebSocketServer({ server, path: '/signal' });
 
 // rooms: Map<code, { initiator, joiner, timeout }>
 const rooms = new Map();
-const ROOM_TTL = 10 * 60 * 1000;
+const ROOM_TTL      = 10 * 60 * 1000; // 10 menit normal
+const ROOM_TTL_AWAY = 20 * 1000;      // 20 detik saat initiator away
 
 // ── Session counter ───────────────────────────────────────
 // Auto-detects storage: Upstash Redis → file → in-memory
@@ -197,7 +198,22 @@ wss.on('connection', (ws, req) => {
     try { if (raw.length > 16384) return; m = JSON.parse(raw); } catch { return; }
 
     switch (m.type) {
-      case 'ping': break; // heartbeat — tidak perlu response
+      case 'ping': break; // heartbeat
+
+      case 'away': {
+        // Initiator pindah tab/app — perpanjang TTL kode jadi 20 detik
+        // Kalau tidak kembali dalam 20 detik, kode hangus
+        const code = String(m.code || '').toUpperCase().slice(0,6);
+        const room = rooms.get(code);
+        if (!room || room.joiner) break; // sudah ada joiner atau tidak ada room
+        if (room.timeout) clearTimeout(room.timeout);
+        room.timeout = setTimeout(() => {
+          send(room.initiator, {type:'code-expired'});
+          try { room.initiator?.close(); } catch {}
+          cleanRoom(code);
+        }, ROOM_TTL_AWAY);
+        break;
+      }
 
       case 'register': {
         const code = String(m.code || '').toUpperCase().slice(0,6);
