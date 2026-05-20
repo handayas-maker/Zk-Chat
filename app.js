@@ -611,30 +611,65 @@
   $('pv-close').addEventListener('click', closeViewer);
   $('photo-viewer').addEventListener('click', e => { if (e.target.id === 'photo-viewer') closeViewer(); });
 
+  // ── Mobile tab suspend handler ────────────────────────────
+  // Android/iOS suspend WebSocket saat user pindah app.
+  // Saat kembali ke browser, langsung reconnect dalam <3 detik.
+
+  let _reconnectTimer = null;
+
+  function attemptReconnect() {
+    // Hanya reconnect kalau sedang di waiting screen (sudah punya kode tapi belum tersambung)
+    if (!myCode || !isInitiator || dc) return;
+
+    // Kalau WebSocket masih hidup, tidak perlu reconnect
+    if (ws && ws.readyState === WebSocket.OPEN) return;
+
+    // Tutup WS lama kalau ada
+    if (ws) { try { ws.close(); } catch {} ws = null; }
+
+    // Update status agar user tahu sedang reconnect
+    const waitingStatus = $('opts-waiting')?.querySelector('.status');
+    if (waitingStatus) {
+      waitingStatus.textContent = lang === 'en'
+        ? 'Reconnecting...' : 'Menghubungkan kembali...';
+      waitingStatus.className = 'status s-info';
+    }
+
+    connectWS()
+      .then(() => {
+        sig({ type: 'register', code: myCode });
+        // Restore status normal
+        const s = $('opts-waiting')?.querySelector('.status');
+        if (s) {
+          s.textContent = t('waiting');
+          s.className = 'status s-wait';
+        }
+      })
+      .catch(() => {
+        // Retry lagi 3 detik kemudian
+        _reconnectTimer = setTimeout(attemptReconnect, 3000);
+      });
+  }
+
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
+      // Clear any pending reconnect timer
+      if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+
       // Kalau sedang chat — reconnect ICE kalau perlu
       if (pc && ['disconnected','failed'].includes(pc.iceConnectionState))
         try { pc.restartIce(); } catch {}
 
-      // Kalau sedang waiting (sudah generate kode tapi peer belum join)
-      // cek WebSocket masih hidup, kalau putus reconnect dan register ulang
-      if (myCode && isInitiator && !dc) {
-        if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-          setStatus(t('connecting'), 's-info');
-          connectWS().then(() => {
-            sig({ type: 'register', code: myCode });
-            setStatus(t('waiting'), 's-wait');
-          }).catch(() => {
-            setStatus(t('errConnect') + 'reconnect failed', 's-error');
-          });
-        }
-      }
+      // Kalau sedang waiting — reconnect WebSocket segera
+      // Delay 300ms untuk beri waktu OS resume network stack
+      setTimeout(attemptReconnect, 300);
+    } else {
+      // Tab tersembunyi — clear reconnect timer
+      if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
     }
   });
 
-  // WebSocket heartbeat — ping setiap 25 detik supaya tidak di-timeout server/proxy
-  // Penting untuk mobile yang sering suspend background tabs
+  // Heartbeat setiap 25 detik — mencegah WebSocket di-timeout proxy/firewall
   setInterval(() => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       try { ws.send(JSON.stringify({ type: 'ping' })); } catch {}

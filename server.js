@@ -202,7 +202,28 @@ wss.on('connection', (ws, req) => {
       case 'register': {
         const code = String(m.code || '').toUpperCase().slice(0,6);
         if (!/^[A-Z0-9]{6}$/.test(code)) return;
-        if (rooms.has(code)) return send(ws, {type:'code-taken'});
+
+        // Kalau kode sudah ada tapi belum ada joiner → ini reconnect dari initiator
+        // Ganti koneksi WS lama dengan yang baru
+        if (rooms.has(code)) {
+          const existing = rooms.get(code);
+          if (existing.joiner) {
+            // Sudah ada peer yang join — tolak
+            return send(ws, {type:'code-taken'});
+          }
+          // Belum ada joiner — ini reconnect, update initiator WS
+          clearTimeout(existing.timeout);
+          existing.initiator = ws;
+          existing.timeout = setTimeout(() => {
+            send(ws, {type:'code-expired'});
+            try { ws.close(); } catch {}
+            cleanRoom(code);
+          }, ROOM_TTL);
+          ws._code = code; ws._role = 'initiator';
+          send(ws, {type:'registered'});
+          break;
+        }
+
         ws._code = code; ws._role = 'initiator';
         rooms.set(code, {
           initiator: ws, joiner: null,
