@@ -612,10 +612,34 @@
   $('photo-viewer').addEventListener('click', e => { if (e.target.id === 'photo-viewer') closeViewer(); });
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && pc)
-      if (['disconnected','failed'].includes(pc.iceConnectionState))
+    if (document.visibilityState === 'visible') {
+      // Kalau sedang chat — reconnect ICE kalau perlu
+      if (pc && ['disconnected','failed'].includes(pc.iceConnectionState))
         try { pc.restartIce(); } catch {}
+
+      // Kalau sedang waiting (sudah generate kode tapi peer belum join)
+      // cek WebSocket masih hidup, kalau putus reconnect dan register ulang
+      if (myCode && isInitiator && !dc) {
+        if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+          setStatus(t('connecting'), 's-info');
+          connectWS().then(() => {
+            sig({ type: 'register', code: myCode });
+            setStatus(t('waiting'), 's-wait');
+          }).catch(() => {
+            setStatus(t('errConnect') + 'reconnect failed', 's-error');
+          });
+        }
+      }
+    }
   });
+
+  // WebSocket heartbeat — ping setiap 25 detik supaya tidak di-timeout server/proxy
+  // Penting untuk mobile yang sering suspend background tabs
+  setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ type: 'ping' })); } catch {}
+    }
+  }, 25000);
 
   window.addEventListener('beforeunload', () => {
     if (dc?.readyState === 'open') try { dc.send(JSON.stringify({type:'leave'})); } catch {}
