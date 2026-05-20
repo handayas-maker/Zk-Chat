@@ -255,10 +255,29 @@
   // ── WebRTC ────────────────────────────────────────────────
   async function makePeer() {
     pc = new RTCPeerConnection({ iceServers: [
-      {urls:'stun:stun.l.google.com:19302'},
-      {urls:'stun:stun1.l.google.com:19302'},
-      {urls:'stun:stun.cloudflare.com:3478'},
-    ]});
+      // STUN servers — multiple untuk fallback
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      { urls: 'stun:stun.stunprotocol.org:3478' },
+      { urls: 'stun:stun.voip.blackberry.com:3478' },
+      // TURN server gratis dari Open Relay Project
+      // Membantu koneksi di belakang NAT ketat (mobile data seluler)
+      {
+        urls: [
+          'turn:openrelay.metered.ca:80',
+          'turn:openrelay.metered.ca:443',
+          'turn:openrelay.metered.ca:443?transport=tcp',
+        ],
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
+    ],
+    iceCandidatePoolSize: 10,
+    });
     pc.onicecandidate = e => { if (e.candidate) sig({type:'ice', candidate:e.candidate}); };
     pc.onconnectionstatechange = () => {
       if      (pc.connectionState === 'connected')    setConn(true);
