@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex, nofollow">
-<title>ZK Chat — Private, No Trace</title>
+<title>Ghost Chat — Private, No Trace</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -718,7 +718,7 @@
     <div class="landing-card">
       <div class="logo">
         <span class="logo-dot"></span>
-        <span>ZK Chat</span>
+        <span>Ghost Chat</span>
       </div>
       <p class="tagline">
         Chat privat tanpa jejak. Tidak ada akun, tidak ada server menyimpan pesan, tidak ada history. Tutup tab — semuanya hilang.
@@ -781,7 +781,6 @@
         <div class="privacy-list-item">Peer-to-peer terenkripsi (DTLS/SRTP)</div>
         <div class="privacy-list-item">Tidak ada pesan disimpan di server</div>
         <div class="privacy-list-item">Tidak ada history, tidak ada log</div>
-        <div class="privacy-list-item">Sesi maksimal 12 jam, otomatis reset</div>
         <div class="privacy-list-item">Tutup tab = semua data hilang</div>
       </div>
 
@@ -808,10 +807,7 @@
           <div class="chat-subtitle" id="chat-subtitle">Terhubung • End-to-end</div>
         </div>
       </div>
-      <div style="display:flex; align-items:center; gap:10px;">
-        <div id="session-timer" style="display:none; font-family:'SF Mono',Monaco,monospace; font-size:11px; color:var(--text-dim); padding:4px 8px; background:var(--bg-input); border-radius:6px; border:1px solid var(--border);">12:00:00</div>
-        <button class="leave-btn" id="leave-btn">Keluar</button>
-      </div>
+      <button class="leave-btn" id="leave-btn">Keluar</button>
     </div>
 
     <div class="messages" id="messages"></div>
@@ -865,15 +861,9 @@
       <div class="price-tag-label">Sekali bayar per sesi</div>
     </div>
 
-    <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 12px; font-size: 12px; color: var(--text-dim); text-align: center; line-height: 1.5;">
-      <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7; margin-bottom: 6px;">Metode pembayaran</div>
-      <div style="color: var(--text); font-weight: 500;">📱 QRIS</div>
-      <div style="margin-top: 4px; font-size: 11px;">Scan dengan GoPay, OVO, Dana, ShopeePay, LinkAja, atau mobile banking apa pun</div>
-    </div>
-
     <div class="modal-actions">
       <button class="btn btn-secondary" id="premium-cancel-btn">Nanti saja</button>
-      <button class="btn btn-gold" id="premium-pay-btn">Bayar dengan QRIS</button>
+      <button class="btn btn-gold" id="premium-pay-btn">Bayar sekarang</button>
     </div>
   </div>
 </div>
@@ -886,7 +876,7 @@
       Layanan ini disediakan untuk komunikasi pribadi yang sah. Dilarang menggunakan untuk: pelecehan, ancaman, penyebaran konten ilegal, penipuan, atau aktivitas yang melanggar hukum Indonesia.<br><br>
 
       <strong>2. Privasi data</strong><br>
-      Pesan teks dan foto dikirim peer-to-peer dengan enkripsi end-to-end. Operator layanan tidak memiliki akses ke isi pesan atau foto anda. Tidak ada history yang disimpan. Sesi chat maksimal 12 jam, setelah itu otomatis berakhir dan halaman akan reload.<br><br>
+      Pesan teks dan foto dikirim peer-to-peer dengan enkripsi end-to-end. Operator layanan tidak memiliki akses ke isi pesan atau foto anda. Tidak ada history yang disimpan.<br><br>
 
       <strong>3. Pembayaran Premium</strong><br>
       Pembayaran Rp 10.000 berlaku untuk satu sesi chat saja dan tidak dapat di-refund setelah fitur aktif. Pembayaran diproses melalui penyedia payment gateway pihak ketiga.<br><br>
@@ -895,10 +885,7 @@
       Operator tidak bertanggung jawab atas konten yang dipertukarkan antar pengguna. Pengguna sepenuhnya bertanggung jawab atas konten yang mereka kirim.<br><br>
 
       <strong>5. Konten ilegal</strong><br>
-      Penggunaan untuk pertukaran konten ilegal (termasuk namun tidak terbatas pada konten yang melibatkan anak di bawah umur, ancaman, penipuan) akan dilaporkan ke pihak berwajib sesuai UU ITE.<br><br>
-
-      <strong>6. Batasan akses (Rate Limiting)</strong><br>
-      Untuk mencegah penyalahgunaan, IP yang melakukan lebih dari 5 percobaan koneksi atau request layanan dalam 1 jam akan di-suspend selama 24 jam. Setelah masa suspend berakhir, akses akan dipulihkan otomatis. Operator berhak memperpanjang masa suspend untuk kasus penyalahgunaan berulang.
+      Penggunaan untuk pertukaran konten ilegal (termasuk namun tidak terbatas pada konten yang melibatkan anak di bawah umur, ancaman, penipuan) akan dilaporkan ke pihak berwajib sesuai UU ITE.
     </div>
     <div class="modal-actions">
       <button class="btn" id="terms-close-btn" style="width:100%;">Tutup</button>
