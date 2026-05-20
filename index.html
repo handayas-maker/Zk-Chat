@@ -8,909 +8,680 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex, nofollow">
-<title>Ghost Chat — Private, No Trace</title>
+<script>
+window._ea_loaded = false;
+function loadEthicalAds(pid) {
+  if (window._ea_loaded || !pid) return;
+  window._ea_loaded = true;
+  var s = document.createElement('script');
+  s.async = true; s.src = 'https://media.ethicalads.io/media/client/ethicalads.min.js';
+  s.onload = function() {
+    var el = document.getElementById('ea-container');
+    if (el) el.setAttribute('data-ea-publisher', pid);
+    if (window.ethicalads) window.ethicalads.load();
+  };
+  document.head.appendChild(s);
+}
+</script>
+<title>ZK Chat — Private, No Trace</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
-  :root {
-    --bg: #0a0a0f;
-    --bg-elevated: #13131a;
-    --bg-input: #1a1a24;
-    --border: #2a2a36;
-    --text: #e8e8ed;
-    --text-dim: #8a8a96;
-    --accent: #7c6cf5;
-    --accent-hover: #6b5cea;
-    --gold: #fbbf24;
-    --gold-dim: #d97706;
-    --success: #4ade80;
-    --danger: #f87171;
-    --safe-top: env(safe-area-inset-top, 0);
-    --safe-bottom: env(safe-area-inset-bottom, 0);
-  }
-
-  html, body {
-    height: 100%;
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 15px;
-    overflow: hidden;
-    overscroll-behavior: none;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  body {
-    padding-top: var(--safe-top);
-    padding-bottom: var(--safe-bottom);
-  }
-
-  #app {
-    height: 100vh;
-    height: 100dvh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .landing {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .landing-card {
-    width: 100%;
-    max-width: 440px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 32px 26px;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-    font-size: 22px;
-    font-weight: 600;
-  }
-
-  .logo-dot {
-    width: 10px; height: 10px;
-    background: var(--success);
-    border-radius: 50%;
-    box-shadow: 0 0 12px var(--success);
-    animation: pulse 2s infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  .tagline {
-    color: var(--text-dim);
-    font-size: 13px;
-    margin-bottom: 24px;
-    line-height: 1.5;
-  }
-
-  .section-title {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-dim);
-    margin-bottom: 10px;
-    font-weight: 600;
-  }
-
-  .btn {
-    width: 100%;
-    padding: 14px 16px;
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 10px;
-    font-size: 15px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s;
-    font-family: inherit;
-    min-height: 48px;
-    touch-action: manipulation;
-  }
-
-  .btn:hover { background: var(--accent-hover); }
-  .btn:active { transform: scale(0.98); }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  .btn-secondary {
-    background: var(--bg-input);
-    color: var(--text);
-    border: 1px solid var(--border);
-  }
-  .btn-secondary:hover { background: #20202c; }
-
-  .btn-gold {
-    background: linear-gradient(135deg, var(--gold), var(--gold-dim));
-    color: #0a0a0f;
-    font-weight: 600;
-  }
-  .btn-gold:hover { filter: brightness(1.1); }
-
-  .divider {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 18px 0;
-    color: var(--text-dim);
-    font-size: 12px;
-  }
-  .divider::before, .divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--border);
-  }
-
-  .input-group { display: flex; gap: 8px; }
-
-  input[type="text"] {
-    flex: 1;
-    padding: 14px;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text);
-    font-size: 16px;
-    font-family: inherit;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    outline: none;
-    transition: border-color 0.15s;
-    min-height: 48px;
-    -webkit-appearance: none;
-    appearance: none;
-  }
-
-  input[type="text"]:focus { border-color: var(--accent); }
-  input[type="text"]::placeholder { color: var(--text-dim); text-transform: none; letter-spacing: normal; }
-
-  .premium-promo {
-    margin-top: 20px;
-    padding: 16px;
-    background: linear-gradient(135deg, rgba(251,191,36,0.08), rgba(217,119,6,0.04));
-    border: 1px solid rgba(251,191,36,0.3);
-    border-radius: 12px;
-  }
-
-  .premium-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--gold);
-    margin-bottom: 10px;
-  }
-
-  .premium-features {
-    font-size: 12px;
-    color: var(--text-dim);
-    line-height: 1.7;
-    margin-bottom: 12px;
-  }
-
-  .premium-features-item { display: flex; align-items: center; gap: 6px; }
-  .premium-features-item::before { content: '✨'; font-size: 10px; }
-
-  .premium-price {
-    font-size: 13px;
-    color: var(--text);
-  }
-  .premium-price strong { color: var(--gold); font-size: 16px; }
-
-  .code-display {
-    margin-top: 18px;
-    padding: 18px;
-    background: var(--bg-input);
-    border: 1px dashed var(--border);
-    border-radius: 10px;
-    text-align: center;
-  }
-
-  .code-label {
-    font-size: 11px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 8px;
-  }
-
-  .code-value {
-    font-family: 'SF Mono', Monaco, monospace;
-    font-size: 28px;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    color: var(--accent);
-    margin-bottom: 12px;
-    user-select: all;
-    -webkit-user-select: all;
-  }
-
-  .premium-badge-inline {
-    display: inline-block;
-    background: var(--gold);
-    color: #0a0a0f;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-left: 6px;
-  }
-
-  .code-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-
-  .copy-btn, .share-btn {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    padding: 8px 14px;
-    border-radius: 6px;
-    font-size: 12px;
-    cursor: pointer;
-    font-family: inherit;
-    transition: all 0.15s;
-    min-height: 36px;
-  }
-  .copy-btn:hover, .share-btn:hover { color: var(--text); border-color: var(--text-dim); }
-  .share-btn { display: none; }
-  .share-btn.visible { display: inline-block; }
-
-  .status {
-    margin-top: 14px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    text-align: center;
-    line-height: 1.4;
-  }
-  .status.info { background: rgba(124,108,245,0.1); color: var(--accent); border: 1px solid rgba(124,108,245,0.3); }
-  .status.error { background: rgba(248,113,113,0.1); color: var(--danger); border: 1px solid rgba(248,113,113,0.3); }
-  .status.waiting { background: rgba(251,191,36,0.1); color: var(--gold); border: 1px solid rgba(251,191,36,0.3); }
-  .status.success { background: rgba(74,222,128,0.1); color: var(--success); border: 1px solid rgba(74,222,128,0.3); }
-
-  .privacy-list {
-    margin-top: 22px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border);
-    font-size: 12px;
-    color: var(--text-dim);
-    line-height: 1.8;
-  }
-  .privacy-list-item { display: flex; align-items: center; gap: 8px; }
-  .privacy-list-item::before { content: '✓'; color: var(--success); font-weight: 700; }
-
-  .sponsor-slot {
-    margin-top: 20px;
-    padding: 14px;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    font-size: 13px;
-    color: var(--text-dim);
-    text-align: center;
-    line-height: 1.5;
-  }
-  .sponsor-slot a { color: var(--accent); text-decoration: none; font-weight: 500; }
-  .sponsor-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.6; margin-bottom: 6px; }
-
-  .footer-links {
-    margin-top: 16px;
-    text-align: center;
-    font-size: 11px;
-    color: var(--text-dim);
-    display: flex;
-    justify-content: center;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-  .footer-links a {
-    color: var(--text-dim);
-    text-decoration: none;
-    border-bottom: 1px dashed var(--border);
-    padding-bottom: 1px;
-  }
-  .footer-links a:hover { color: var(--accent); }
-
-  .legal-notice {
-    margin-top: 14px;
-    font-size: 10px;
-    color: var(--text-dim);
-    text-align: center;
-    opacity: 0.7;
-    line-height: 1.4;
-  }
-
-  .chat-screen { display: none; flex-direction: column; height: 100%; }
-  .chat-screen.active { display: flex; }
-
-  .chat-header {
-    padding: 12px 16px;
-    background: var(--bg-elevated);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-shrink: 0;
-    gap: 8px;
-  }
-
-  .chat-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-
-  .conn-indicator {
-    width: 8px; height: 8px;
-    background: var(--success);
-    border-radius: 50%;
-    box-shadow: 0 0 8px var(--success);
-    flex-shrink: 0;
-  }
-  .conn-indicator.disconnected { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
-
-  .chat-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
-  .chat-subtitle { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
-
-  .premium-tag {
-    background: var(--gold);
-    color: #0a0a0f;
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-  }
-
-  .leave-btn {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--danger);
-    padding: 8px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    cursor: pointer;
-    font-family: inherit;
-    transition: all 0.15s;
-    min-height: 36px;
-    flex-shrink: 0;
-  }
-  .leave-btn:hover { background: rgba(248,113,113,0.1); border-color: var(--danger); }
-
-  .messages {
-    flex: 1;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    overscroll-behavior: contain;
-  }
-
-  .messages::-webkit-scrollbar { width: 6px; }
-  .messages::-webkit-scrollbar-track { background: transparent; }
-  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-  .msg {
-    max-width: 80%;
-    padding: 10px 14px;
-    border-radius: 14px;
-    font-size: 15px;
-    line-height: 1.45;
-    word-wrap: break-word;
-    word-break: break-word;
-    animation: slideIn 0.2s ease;
-  }
-
-  @keyframes slideIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .msg.me { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 4px; }
-  .msg.them { align-self: flex-start; background: var(--bg-elevated); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-
-  .msg.system {
-    align-self: center;
-    background: transparent;
-    color: var(--text-dim);
-    font-size: 12px;
-    text-align: center;
-    padding: 6px 12px;
-    max-width: 90%;
-    font-style: italic;
-  }
-
-  .msg-time { font-size: 10px; opacity: 0.7; margin-top: 4px; display: block; }
-
-  .msg-photo {
-    max-width: 240px;
-    max-height: 320px;
-    border-radius: 10px;
-    cursor: pointer;
-    display: block;
-    margin-bottom: 4px;
-  }
-
-  .msg-photo-loading {
-    width: 200px;
-    height: 150px;
-    background: var(--bg-input);
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-dim);
-    font-size: 12px;
-  }
-
-  .msg-photo-progress {
-    width: 200px;
-    height: 6px;
-    background: var(--bg-input);
-    border-radius: 3px;
-    overflow: hidden;
-    margin-top: 6px;
-  }
-  .msg-photo-progress-bar {
-    height: 100%;
-    background: var(--accent);
-    transition: width 0.2s;
-  }
-
-  .msg-location {
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    min-width: 200px;
-  }
-  .msg-location:hover { border-color: var(--accent); }
-  .msg.me .msg-location { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.2); }
-
-  .msg-location-icon { font-size: 22px; flex-shrink: 0; }
-  .msg-location-text { font-size: 13px; line-height: 1.4; }
-  .msg-location-coords { font-size: 11px; opacity: 0.7; margin-top: 2px; }
-
-  .msg-live-tracking {
-    background: rgba(74,222,128,0.1);
-    border: 1px solid var(--success);
-    border-radius: 10px;
-    padding: 12px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 220px;
-  }
-
-  .live-dot {
-    width: 8px; height: 8px;
-    background: var(--success);
-    border-radius: 50%;
-    box-shadow: 0 0 8px var(--success);
-    animation: pulse 1.5s infinite;
-    flex-shrink: 0;
-  }
-
-  .composer {
-    padding: 10px 12px;
-    padding-bottom: max(10px, var(--safe-bottom));
-    background: var(--bg-elevated);
-    border-top: 1px solid var(--border);
-    display: flex;
-    gap: 6px;
-    align-items: flex-end;
-    flex-shrink: 0;
-  }
-
-  .composer textarea {
-    flex: 1;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text);
-    padding: 11px 14px;
-    font-size: 16px;
-    font-family: inherit;
-    resize: none;
-    max-height: 120px;
-    min-height: 44px;
-    outline: none;
-    transition: border-color 0.15s;
-    -webkit-appearance: none;
-    appearance: none;
-  }
-
-  .composer textarea:focus { border-color: var(--accent); }
-
-  .composer-btn {
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s;
-    flex-shrink: 0;
-    touch-action: manipulation;
-  }
-
-  .composer-btn:hover { background: #20202c; color: var(--text); }
-  .composer-btn:active { transform: scale(0.95); }
-  .composer-btn.premium-locked { opacity: 0.5; }
-  .composer-btn.active { background: var(--success); color: white; border-color: var(--success); }
-
-  .composer-btn svg { width: 20px; height: 20px; }
-
-  .send-btn {
-    background: var(--accent);
-    border: none;
-    color: white;
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.15s;
-    flex-shrink: 0;
-    touch-action: manipulation;
-  }
-  .send-btn:hover { background: var(--accent-hover); }
-  .send-btn:active { transform: scale(0.95); }
-  .send-btn svg { width: 18px; height: 18px; }
-
-  .typing-indicator {
-    color: var(--text-dim);
-    font-size: 12px;
-    padding: 0 16px 6px;
-    height: 18px;
-    font-style: italic;
-  }
-
-  .modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.85);
-    z-index: 100;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-  .modal-overlay.active { display: flex; }
-
-  .modal {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
-    max-width: 380px;
-    width: 100%;
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-
-  .modal-title {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .modal-subtitle {
-    font-size: 13px;
-    color: var(--text-dim);
-    margin-bottom: 20px;
-    line-height: 1.5;
-  }
-
-  .premium-features-modal {
-    background: var(--bg-input);
-    border-radius: 10px;
-    padding: 14px;
-    margin-bottom: 18px;
-  }
-
-  .premium-features-modal-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 0;
-    font-size: 14px;
-  }
-  .premium-features-modal-item::before { content: '✨'; }
-
-  .price-tag {
-    text-align: center;
-    margin: 16px 0;
-  }
-  .price-tag-amount {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--gold);
-  }
-  .price-tag-label {
-    font-size: 12px;
-    color: var(--text-dim);
-    margin-top: 4px;
-  }
-
-  .modal-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 16px;
-  }
-
-  .modal-actions .btn { width: auto; flex: 1; }
-
-  .photo-viewer {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.95);
-    z-index: 200;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-  }
-  .photo-viewer.active { display: flex; }
-  .photo-viewer img { max-width: 100%; max-height: 100%; border-radius: 8px; }
-  .photo-viewer-close {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    width: 40px;
-    height: 40px;
-    background: rgba(255,255,255,0.1);
-    border: none;
-    border-radius: 50%;
-    color: white;
-    font-size: 20px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  @media (max-width: 380px) {
-    .landing-card { padding: 24px 18px; }
-    .code-value { font-size: 24px; letter-spacing: 0.12em; }
-    .msg { max-width: 85%; font-size: 14px; }
-    .logo { font-size: 20px; }
-  }
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0a0f;--card:#13131a;--inp:#1a1a24;--bdr:#2a2a36;
+  --txt:#e8e8ed;--dim:#8a8a96;--acc:#7c6cf5;--acc2:#6b5cea;
+  --grn:#4ade80;--red:#f87171;--ylw:#fbbf24;
+  --sat:env(safe-area-inset-top,0px);--sar:env(safe-area-inset-right,0px);
+  --sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);
+}
+html{height:100%;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{
+  height:100%;background:var(--bg);color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  font-size:15px;line-height:1.4;overflow:hidden;overscroll-behavior:none;
+  -webkit-font-smoothing:antialiased;
+  padding-top:var(--sat);padding-left:var(--sal);padding-right:var(--sar);
+}
+#app{height:100vh;height:100dvh;display:flex;flex-direction:column}
+
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes popin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes tblink{0%,100%{opacity:1}50%{opacity:.45}}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+@keyframes slideup{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* lang bar */
+.lang-bar{position:fixed;top:calc(var(--sat) + 10px);right:14px;display:flex;gap:4px;z-index:50}
+.lang-btn{background:var(--inp);border:1px solid var(--bdr);color:var(--dim);padding:5px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;min-height:32px;touch-action:manipulation}
+.lang-btn.active{background:var(--acc);color:#fff;border-color:var(--acc)}
+
+/* landing */
+.landing{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:calc(var(--sat) + 52px) 16px calc(var(--sab) + 24px);display:flex;justify-content:center}
+.card{width:100%;max-width:420px;background:var(--card);border:1px solid var(--bdr);border-radius:18px;padding:28px 20px 24px;margin:0 auto;animation:fadein .2s ease}
+.logo{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700;margin-bottom:8px;letter-spacing:-.01em}
+.logo-dot{width:9px;height:9px;background:var(--grn);border-radius:50%;box-shadow:0 0 10px var(--grn);animation:blink 2.2s infinite;flex-shrink:0}
+.tagline{color:var(--dim);font-size:13px;line-height:1.6;margin-bottom:22px}
+.slbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:600;margin-bottom:9px}
+.btn{width:100%;padding:14px 16px;background:var(--acc);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;min-height:48px;touch-action:manipulation;transition:background .15s,transform .1s;user-select:none;-webkit-user-select:none}
+.btn:active{transform:scale(.97);background:var(--acc2)}
+.btn-sec{background:var(--inp);color:var(--txt);border:1px solid var(--bdr)}
+.btn-sec:active{background:#1e1e2c}
+.divider{display:flex;align-items:center;gap:12px;margin:16px 0;color:var(--dim);font-size:12px}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--bdr)}
+.input-row{display:flex;gap:8px;align-items:stretch}
+input[type="text"]{flex:1;padding:0 14px;height:48px;background:var(--inp);border:1px solid var(--bdr);border-radius:12px;color:var(--txt);font-size:16px;font-family:inherit;letter-spacing:.08em;text-transform:uppercase;outline:none;-webkit-appearance:none;appearance:none;transition:border-color .15s}
+input[type="text"]:focus{border-color:var(--acc)}
+input[type="text"]::placeholder{text-transform:none;letter-spacing:normal;color:var(--dim);font-size:14px}
+
+/* code box */
+.code-box{margin-top:14px;padding:20px 16px 16px;background:var(--inp);border:1px dashed var(--bdr);border-radius:12px;text-align:center}
+.code-lbl{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px}
+.code-val{font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:clamp(22px,7vw,30px);font-weight:700;letter-spacing:.18em;color:var(--acc);margin-bottom:14px;user-select:all;-webkit-user-select:all}
+.code-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.small-btn{background:transparent;border:1px solid var(--bdr);color:var(--dim);padding:8px 14px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;min-height:38px;touch-action:manipulation}
+.small-btn:active{color:var(--txt);border-color:var(--dim)}
+.share-btn{display:none}
+.share-btn.show{display:inline-block}
+
+/* status */
+.status{margin-top:12px;padding:11px 14px;border-radius:10px;font-size:13px;text-align:center;line-height:1.5}
+.s-info{background:rgba(124,108,245,.1);color:var(--acc);border:1px solid rgba(124,108,245,.3)}
+.s-error{background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.3)}
+.s-wait{background:rgba(251,191,36,.1);color:var(--ylw);border:1px solid rgba(251,191,36,.3)}
+
+/* ads */
+.ad-slot{margin-top:18px}
+.ea-wrap{padding:14px;background:var(--inp);border:1px solid var(--bdr);border-radius:12px;text-align:center;min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ad-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;opacity:.55;margin-bottom:5px;color:var(--dim)}
+.manual-sponsor{padding:13px 14px;background:var(--inp);border:1px solid var(--bdr);border-radius:12px;font-size:13px;color:var(--dim);text-align:center;line-height:1.5}
+.manual-sponsor a{color:var(--acc);text-decoration:none;font-weight:500}
+
+/* privacy list */
+.priv-list{margin-top:18px;padding-top:16px;border-top:1px solid var(--bdr);font-size:12px;color:var(--dim);line-height:1.9}
+.priv-item::before{content:'✓ ';color:var(--grn);font-weight:700}
+
+/* counter */
+.session-counter{margin-top:12px;text-align:center;font-size:12px;color:var(--dim)}
+.counter-num{font-family:'SF Mono','Fira Code',monospace;color:var(--acc);font-weight:600}
+
+/* footer */
+.footer{margin-top:14px;text-align:center;font-size:11px;color:var(--dim);display:flex;justify-content:center;gap:16px;flex-wrap:wrap}
+.footer a{color:var(--dim);text-decoration:none;border-bottom:1px dashed var(--bdr);padding-bottom:1px;min-height:28px;display:inline-flex;align-items:center}
+.footer a:active{color:var(--acc)}
+.donate-desc{margin-top:10px;font-size:11px;color:var(--dim);text-align:center;line-height:1.5}
+.legal{margin-top:10px;font-size:10px;color:var(--dim);text-align:center;opacity:.6;line-height:1.5}
+
+/* chat */
+.chat{display:none;flex-direction:column;height:100%}
+.chat.on{display:flex}
+.chat-header{padding:10px 14px;padding-top:max(10px,var(--sat));background:var(--card);border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px}
+.chat-left{display:flex;align-items:center;gap:9px;min-width:0;flex:1}
+.conn-dot{width:8px;height:8px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);flex-shrink:0}
+.conn-dot.off{background:var(--red);box-shadow:0 0 8px var(--red)}
+.chat-title{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-sub{font-size:10px;color:var(--dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.timer{font-family:'SF Mono',monospace;font-size:10px;color:var(--dim);padding:4px 7px;background:var(--inp);border:1px solid var(--bdr);border-radius:6px;letter-spacing:.03em;white-space:nowrap}
+.timer.warn{color:var(--ylw);border-color:rgba(251,191,36,.5)}
+.timer.crit{color:var(--red);border-color:var(--red);animation:tblink 1s infinite}
+.leave-btn{background:transparent;border:1px solid var(--bdr);color:var(--red);padding:6px 12px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;flex-shrink:0;min-height:34px;touch-action:manipulation}
+.leave-btn:active{background:rgba(248,113,113,.1)}
+
+/* messages */
+.messages{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:12px 14px;display:flex;flex-direction:column;gap:6px;scroll-behavior:smooth;-ms-overflow-style:none;scrollbar-width:none}
+.messages::-webkit-scrollbar{display:none}
+.msg{max-width:82%;padding:9px 13px;border-radius:16px;font-size:15px;line-height:1.45;word-break:break-word;animation:popin .15s ease}
+.msg.me{align-self:flex-end;background:var(--acc);color:#fff;border-bottom-right-radius:4px}
+.msg.them{align-self:flex-start;background:var(--card);border:1px solid var(--bdr);border-bottom-left-radius:4px}
+.msg.sys{align-self:center;background:transparent;color:var(--dim);font-size:11px;text-align:center;padding:4px 10px;max-width:92%;font-style:italic;border-radius:0}
+.msg-time{font-size:10px;opacity:.6;margin-top:4px;display:block}
+.msg-img{max-width:min(240px,72vw);max-height:300px;border-radius:10px;display:block;cursor:pointer;margin-bottom:3px;object-fit:cover}
+.msg-img-loading{width:min(200px,64vw);height:130px;background:var(--inp);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:12px}
+.progress-wrap{width:min(200px,64vw);height:5px;background:var(--inp);border-radius:3px;overflow:hidden;margin-top:6px}
+.progress-bar{height:100%;background:var(--acc);transition:width .2s}
+.msg-loc{min-width:min(190px,70vw);max-width:100%;padding:9px 12px;background:var(--inp);border:1px solid var(--bdr);border-radius:10px;display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:3px}
+.msg-loc:active{border-color:var(--acc)}
+.msg.me .msg-loc{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.2)}
+.loc-icon{font-size:22px;flex-shrink:0}
+.loc-label{font-size:13px;font-weight:500}
+.loc-coords{font-size:11px;opacity:.65;margin-top:2px}
+.msg-live{min-width:min(210px,72vw);padding:11px 12px;background:rgba(74,222,128,.08);border:1px solid var(--grn);border-radius:10px;display:flex;align-items:center;gap:10px;margin-bottom:3px}
+.live-dot{width:8px;height:8px;background:var(--grn);border-radius:50%;box-shadow:0 0 8px var(--grn);animation:blink 1.5s infinite;flex-shrink:0}
+.typing{flex-shrink:0;height:20px;padding:0 16px 4px;font-size:11px;color:var(--dim);font-style:italic}
+
+/* composer */
+.composer{flex-shrink:0;padding:8px 12px;padding-bottom:max(10px,var(--sab));background:var(--card);border-top:1px solid var(--bdr);display:flex;gap:7px;align-items:flex-end}
+.composer textarea{flex:1;background:var(--inp);border:1px solid var(--bdr);border-radius:12px;color:var(--txt);padding:11px 14px;font-size:16px;font-family:inherit;resize:none;min-height:44px;max-height:130px;outline:none;-webkit-appearance:none;appearance:none;transition:border-color .15s;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.composer textarea:focus{border-color:var(--acc)}
+.composer textarea::placeholder{color:var(--dim)}
+.icon-btn{background:var(--inp);border:1px solid var(--bdr);color:var(--dim);width:44px;height:44px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation}
+.icon-btn:active{background:var(--bdr);color:var(--txt)}
+.icon-btn svg{width:20px;height:20px}
+.send-btn{background:var(--acc);color:#fff;border:none;width:44px;height:44px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;transition:background .15s,transform .1s}
+.send-btn:active{background:var(--acc2);transform:scale(.93)}
+.send-btn svg{width:18px;height:18px}
+
+/* modals */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;align-items:flex-end;justify-content:center;padding:0;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.overlay.on{display:flex;animation:fadein .2s ease}
+.modal{background:var(--card);border:1px solid var(--bdr);border-radius:20px 20px 0 0;padding:20px;padding-bottom:max(20px,var(--sab));width:100%;max-width:480px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;animation:slideup .25s ease}
+.modal::before{content:'';display:block;width:36px;height:4px;background:var(--bdr);border-radius:2px;margin:0 auto 16px}
+.modal-title{font-size:17px;font-weight:700;margin-bottom:6px}
+.modal-sub{font-size:13px;color:var(--dim);margin-bottom:16px;line-height:1.55}
+.modal-actions{display:flex;gap:8px;margin-top:14px}
+.modal-actions .btn{flex:1;margin:0;font-size:14px}
+
+/* tos */
+.tos-content{font-size:13px;color:#c8c8d0;line-height:1.75;max-height:55vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:4px;scrollbar-width:thin;scrollbar-color:var(--bdr) transparent}
+.tos-content::-webkit-scrollbar{width:3px}
+.tos-content::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:2px}
+.tos-content h3{color:var(--ylw);font-weight:600;font-size:13px;margin:14px 0 5px}
+.tos-content p{margin-bottom:8px}
+.tos-content ul{margin:4px 0 8px 18px}
+.tos-content li{margin-bottom:4px}
+.tos-meta{margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr);font-size:11px;color:var(--dim)}
+
+/* photo viewer */
+.photo-viewer{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.97);align-items:center;justify-content:center;padding:20px}
+.photo-viewer.on{display:flex;animation:fadein .15s ease}
+.photo-viewer img{max-width:100%;max-height:100%;border-radius:10px;object-fit:contain}
+.pv-close{position:absolute;top:max(18px,var(--sat));right:18px;width:42px;height:42px;background:rgba(255,255,255,.14);border:none;border-radius:50%;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
+.pv-close:active{background:rgba(255,255,255,.25)}
+
+/* toast */
+.toast{position:fixed;bottom:calc(var(--sab) + 80px);left:50%;transform:translateX(-50%) translateY(14px);background:#1e1e2e;border:1px solid var(--acc);color:var(--txt);padding:10px 20px;border-radius:50px;font-size:13px;font-weight:500;white-space:nowrap;opacity:0;transition:opacity .2s,transform .2s;z-index:400;pointer-events:none;box-shadow:0 4px 24px rgba(0,0,0,.6)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media(max-width:390px){
+  .card{padding:24px 16px 20px;border-radius:14px}
+  .msg{max-width:87%;font-size:14px}
+  .chat-title{font-size:13px}
+  .timer{font-size:9px;padding:3px 6px}
+  .leave-btn{font-size:11px;padding:5px 10px}
+  .icon-btn,.send-btn{width:40px;height:40px}
+  .modal{border-radius:16px 16px 0 0;padding:16px}
+}
+@media(max-height:500px) and (orientation:landscape){
+  .landing{padding-top:calc(var(--sat) + 44px)}
+  .card{padding:16px}
+  .tagline{margin-bottom:14px}
+  .chat-header{padding-top:max(8px,var(--sat))}
+  .composer{padding-bottom:max(6px,var(--sab))}
+}
 </style>
 </head>
 <body>
-
 <div id="app">
 
-  <div class="landing" id="landing">
-    <div class="landing-card">
-      <div class="logo">
-        <span class="logo-dot"></span>
-        <span>Ghost Chat</span>
-      </div>
-      <p class="tagline">
-        Chat privat tanpa jejak. Tidak ada akun, tidak ada server menyimpan pesan, tidak ada history. Tutup tab — semuanya hilang.
-      </p>
+<div class="lang-bar">
+  <button class="lang-btn active" id="btn-id" onclick="zkLang('id')">ID</button>
+  <button class="lang-btn"        id="btn-en" onclick="zkLang('en')">EN</button>
+</div>
 
-      <div id="initial-options">
-        <div class="section-title">Mulai percakapan baru</div>
-        <button class="btn" id="generate-btn">Buat kode unik (Gratis)</button>
+<!-- ═══ LANDING ═══ -->
+<div class="landing" id="landing">
+<div class="card">
 
-        <div class="premium-promo">
-          <div class="premium-title">⭐ Sesi Premium</div>
-          <div class="premium-features">
-            <div class="premium-features-item">Kirim foto & selfie (auto-hilang)</div>
-            <div class="premium-features-item">Share lokasi pin</div>
-            <div class="premium-features-item">Live location tracking</div>
-          </div>
-          <div class="premium-price">
-            Sekali bayar <strong>Rp 10.000</strong> per sesi
-          </div>
-          <button class="btn btn-gold" id="generate-premium-btn" style="margin-top:12px;">⭐ Buat sesi Premium</button>
-        </div>
+  <div class="logo"><span class="logo-dot"></span>ZK Chat</div>
 
-        <div class="divider">atau</div>
+  <p class="tagline" id="txt-tagline">
+    Chat privat tanpa jejak. Tidak ada akun, tidak ada server menyimpan pesan, tidak ada history. Tutup tab — semuanya hilang.
+  </p>
 
-        <div class="section-title">Gabung dengan kode</div>
-        <div class="input-group">
-          <input type="text" id="join-code" placeholder="6-karakter kode" maxlength="6" autocomplete="off" autocapitalize="characters" inputmode="text">
-          <button class="btn btn-secondary" id="join-btn" style="width:auto; padding:14px 20px;">Join</button>
-        </div>
-      </div>
+  <!-- Main options -->
+  <div id="opts-main">
+    <div class="slbl" id="txt-newchat">Mulai percakapan baru</div>
+    <button class="btn" id="gen-btn">Buat kode unik</button>
 
-      <div id="code-shown" style="display:none;">
-        <div class="code-display">
-          <div class="code-label">
-            Kode anda
-            <span class="premium-badge-inline" id="premium-badge" style="display:none;">⭐ Premium</span>
-          </div>
-          <div class="code-value" id="my-code">------</div>
-          <div class="code-actions">
-            <button class="copy-btn" id="copy-btn">Salin kode</button>
-            <button class="share-btn" id="share-btn">Bagikan</button>
-          </div>
-        </div>
-        <div class="status waiting" id="wait-status">
-          Bagikan kode ini ke lawan bicara. Menunggu mereka bergabung...
-        </div>
-        <button class="btn btn-secondary" id="cancel-btn" style="margin-top:14px;">Batal</button>
-      </div>
+    <div class="divider"><span id="txt-or">atau</span></div>
 
-      <div id="status-area"></div>
-
-      <div class="sponsor-slot" id="sponsor-slot">
-        <div class="sponsor-label">Sponsor</div>
-        <div id="sponsor-content">
-          <a href="#" id="sponsor-link" target="_blank" rel="noopener">Lindungi koneksi anda dengan VPN</a>
-        </div>
-      </div>
-
-      <div class="privacy-list">
-        <div class="privacy-list-item">Peer-to-peer terenkripsi (DTLS/SRTP)</div>
-        <div class="privacy-list-item">Tidak ada pesan disimpan di server</div>
-        <div class="privacy-list-item">Tidak ada history, tidak ada log</div>
-        <div class="privacy-list-item">Tutup tab = semua data hilang</div>
-      </div>
-
-      <div class="footer-links">
-        <a href="#" id="donate-link">☕ Donasi</a>
-        <a href="#" id="terms-link">Syarat & Ketentuan</a>
-      </div>
-
-      <div class="legal-notice">
-        Dengan menggunakan layanan ini, anda setuju untuk tidak menggunakannya untuk hal yang melanggar hukum.
-      </div>
+    <div class="slbl" id="txt-joinchat">Gabung dengan kode</div>
+    <div class="input-row">
+      <input type="text" id="join-input" maxlength="6"
+             autocomplete="off" autocapitalize="characters"
+             autocorrect="off" spellcheck="false" inputmode="text"
+             placeholder="Masukkan kode 6 karakter">
+      <button class="btn btn-sec" id="join-btn" style="width:auto;padding:0 20px;flex-shrink:0;">
+        Gabung
+      </button>
     </div>
   </div>
 
-  <div class="chat-screen" id="chat-screen">
-    <div class="chat-header">
-      <div class="chat-header-left">
-        <span class="conn-indicator" id="conn-dot"></span>
-        <div>
-          <div class="chat-title">
-            <span>Private session</span>
-            <span class="premium-tag" id="chat-premium-tag" style="display:none;">Premium</span>
-          </div>
-          <div class="chat-subtitle" id="chat-subtitle">Terhubung • End-to-end</div>
-        </div>
+  <!-- Waiting -->
+  <div id="opts-waiting" style="display:none;">
+    <div class="code-box">
+      <div class="code-lbl" id="txt-yourcode">Kode anda</div>
+      <div class="code-val" id="code-display">------</div>
+      <div class="code-actions">
+        <button class="small-btn" id="copy-code-btn">Salin kode</button>
+        <button class="small-btn" id="copy-link-btn">Salin link</button>
+        <button class="small-btn share-btn" id="share-btn">Bagikan</button>
       </div>
+    </div>
+    <div class="status s-wait" id="txt-waiting">
+      Bagikan kode ini ke lawan bicara. Menunggu mereka bergabung...
+    </div>
+    <button class="btn btn-sec" id="cancel-btn" style="margin-top:11px;">Batal</button>
+  </div>
+
+  <div id="status-area"></div>
+
+  <!-- Ad slot -->
+  <div class="ad-slot" id="ad-slot">
+    <div class="ea-wrap" id="ea-slot" style="display:none;">
+      <div class="ad-lbl">Sponsor</div>
+      <div data-ea-publisher="" data-ea-type="image" id="ea-container"></div>
+    </div>
+    <div class="manual-sponsor" id="manual-slot">
+      <div class="ad-lbl">Sponsor</div>
+      <a href="#" id="ad-link" target="_blank" rel="noopener noreferrer">
+        🛡️ Jaga privasi anda dengan ProtonVPN — gratis &amp; no-logs
+      </a>
+    </div>
+  </div>
+
+  <!-- Privacy list -->
+  <div class="priv-list" id="priv-list">
+    <div class="priv-item" id="priv1">Peer-to-peer terenkripsi (WebRTC + DTLS)</div>
+    <div class="priv-item" id="priv2">Foto &amp; lokasi dikirim langsung, tidak lewat server</div>
+    <div class="priv-item" id="priv3">Tidak ada history, tidak ada log</div>
+    <div class="priv-item" id="priv4">Sesi maksimal 12 jam, otomatis reset</div>
+    <div class="priv-item" id="priv5">Tutup tab = semua data hilang selamanya</div>
+  </div>
+
+  <!-- Counter -->
+  <div class="session-counter" id="session-counter">
+    <span id="counter-label">Digunakan</span>
+    <span class="counter-num" id="counter-value">—</span>
+    <span id="counter-suffix">kali</span>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <a href="#" id="donate-link" target="_blank" rel="noopener">💎 Donasi via TON</a>
+    <a href="#" id="tos-link">Syarat &amp; Ketentuan</a>
+  </div>
+  <p class="donate-desc" id="donate-desc">
+    Kalau anda merasa terbantu dan suka dengan ini, bantu donasi untuk developer 😊
+  </p>
+  <p class="legal" id="txt-legal">
+    Dengan menggunakan layanan ini anda setuju tidak menggunakannya untuk hal yang melanggar hukum.
+  </p>
+
+</div>
+</div>
+
+<!-- ═══ CHAT ═══ -->
+<div class="chat" id="chat">
+  <div class="chat-header">
+    <div class="chat-left">
+      <span class="conn-dot" id="conn-dot"></span>
+      <div style="min-width:0;">
+        <div class="chat-title" id="chat-title">Sesi Privat</div>
+        <div class="chat-sub"   id="chat-sub">Terhubung • End-to-end terenkripsi</div>
+      </div>
+    </div>
+    <div class="chat-right">
+      <div class="timer" id="session-timer" style="display:none;">12:00:00</div>
       <button class="leave-btn" id="leave-btn">Keluar</button>
     </div>
-
-    <div class="messages" id="messages"></div>
-    <div class="typing-indicator" id="typing"></div>
-
-    <div class="composer">
-      <button class="composer-btn" id="photo-btn" title="Kirim foto" aria-label="Kirim foto">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-          <circle cx="8.5" cy="8.5" r="1.5"></circle>
-          <polyline points="21 15 16 10 5 21"></polyline>
-        </svg>
-      </button>
-
-      <button class="composer-btn" id="location-btn" title="Kirim lokasi" aria-label="Kirim lokasi">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-          <circle cx="12" cy="10" r="3"></circle>
-        </svg>
-      </button>
-
-      <textarea id="msg-input" placeholder="Ketik pesan..." rows="1" autocomplete="off" autocorrect="off"></textarea>
-
-      <button class="send-btn" id="send-btn" aria-label="Kirim">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="22" y1="2" x2="11" y2="13"></line>
-          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-        </svg>
-      </button>
-    </div>
-
-    <input type="file" id="photo-input" accept="image/*" style="display:none;">
   </div>
-
+  <div class="messages" id="messages"></div>
+  <div class="typing"   id="typing"></div>
+  <div class="composer">
+    <button class="icon-btn" id="photo-btn" aria-label="Kirim foto">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="loc-btn" aria-label="Kirim lokasi">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+        <circle cx="12" cy="10" r="3"/>
+      </svg>
+    </button>
+    <textarea id="msg-input" rows="1"
+              autocomplete="off" autocorrect="off"
+              autocapitalize="sentences" spellcheck="true"
+              placeholder="Ketik pesan..."></textarea>
+    <button class="send-btn" id="send-btn" aria-label="Kirim">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+  <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none;">
 </div>
 
-<div class="modal-overlay" id="premium-modal">
-  <div class="modal">
-    <div class="modal-title">⭐ Sesi Premium</div>
-    <div class="modal-subtitle">Unlock fitur tambahan untuk satu sesi chat ini saja. Tidak ada langganan.</div>
+<!-- ═══ MODALS ═══ -->
 
-    <div class="premium-features-modal">
-      <div class="premium-features-modal-item">Kirim foto & selfie</div>
-      <div class="premium-features-modal-item">Share lokasi pin</div>
-      <div class="premium-features-modal-item">Live location tracking</div>
-      <div class="premium-features-modal-item">Semua tetap end-to-end encrypted</div>
+<!-- Location -->
+<div class="overlay" id="loc-modal">
+  <div class="modal">
+    <div class="modal-title" id="txt-locTitle">📍 Kirim Lokasi</div>
+    <div class="modal-sub"   id="txt-locSub">Pilih jenis lokasi yang ingin dibagikan</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn"     id="loc-pin-btn">📍 Kirim lokasi sekali</button>
+      <button class="btn btn-sec" id="loc-live-btn">🟢 Live tracking (5 menit)</button>
+      <button class="btn btn-sec" id="loc-cancel-btn">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ToS -->
+<div class="overlay" id="tos-modal">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-title" id="txt-tosTitle">Syarat &amp; Ketentuan</div>
+
+    <div class="tos-content" id="tos-id">
+      <h3>1. Identitas Penyelenggara</h3>
+      <p>Layanan ZK Chat dioperasikan oleh pemilik individual. Alat komunikasi privat berbasis WebRTC peer-to-peer. Kontak: <strong>zkchat.support@protonmail.com</strong></p>
+      <h3>2. Penerimaan Syarat</h3>
+      <p>Dengan menggunakan ZK Chat, anda menyetujui seluruh ketentuan ini.</p>
+      <h3>3. Deskripsi Layanan</h3>
+      <p>Aplikasi obrolan privat berbasis web menggunakan WebRTC untuk komunikasi peer-to-peer terenkripsi end-to-end. Pesan, foto, dan lokasi dikirim langsung antar perangkat tanpa menyentuh server. Sesi maksimal 12 jam.</p>
+      <h3>4. Arsitektur Tanpa Data (Zero Data)</h3>
+      <ul>
+        <li>Operator tidak menyimpan isi pesan, foto, atau lokasi — secara teknis tidak memungkinkan</li>
+        <li>Kode sesi 6-karakter hanya di memori server, dihapus saat tersambung atau timeout 10 menit</li>
+        <li>IP digunakan hanya untuk rate limiting, tidak dicatat permanen</li>
+        <li>Tidak ada cookie, localStorage, atau tracking lintas sesi</li>
+      </ul>
+      <h3>5. Larangan Pengguna (UU ITE)</h3>
+      <p>Dilarang menggunakan untuk: pornografi atau konten anak di bawah umur (Pasal 27 ayat 1), pencemaran nama baik (Pasal 27 ayat 3), pemerasan dan ancaman (Pasal 27 ayat 4), hoaks (Pasal 28 ayat 1), ujaran kebencian SARA (Pasal 28 ayat 2), penipuan, judi online, stalking lokasi tanpa izin, atau kegiatan ilegal lainnya.</p>
+      <h3>6. Kebijakan Iklan</h3>
+      <p>Hanya menampilkan iklan yang diseleksi manual. <strong>Dilarang:</strong> judi online, pornografi, produk ilegal, iklan menyesatkan.</p>
+      <h3>7. Pelaporan &amp; Tanggung Jawab</h3>
+      <p>Laporan penyalahgunaan ke email operator. Operator tidak bertanggung jawab atas konten antar pengguna karena enkripsi E2E. Tanggung jawab penuh ada pada pengguna.</p>
+      <h3>8. Pembatasan Akses Otomatis</h3>
+      <p>Lebih dari 5 percobaan koneksi dalam 1 jam = suspend IP 24 jam otomatis.</p>
+      <h3>9. Hukum &amp; Perubahan</h3>
+      <p>Tunduk pada hukum Republik Indonesia. Ketentuan dapat berubah sewaktu-waktu.</p>
+      <div class="tos-meta">Versi 1.1 | Berlaku: 2025 | Bahasa resmi: Bahasa Indonesia</div>
     </div>
 
-    <div class="price-tag">
-      <div class="price-tag-amount">Rp 10.000</div>
-      <div class="price-tag-label">Sekali bayar per sesi</div>
+    <div class="tos-content" id="tos-en" style="display:none;">
+      <h3>1. Service Operator</h3>
+      <p>ZK Chat is operated by an individual. A private peer-to-peer communication tool based on WebRTC. Contact: <strong>zkchat.support@protonmail.com</strong></p>
+      <h3>2. Acceptance of Terms</h3>
+      <p>By using ZK Chat, you agree to all of these terms.</p>
+      <h3>3. Service Description</h3>
+      <p>A web-based private chat app using WebRTC for end-to-end encrypted P2P communication. Messages, photos, and location data are sent directly between devices without touching any server. Sessions last max 12 hours.</p>
+      <h3>4. Zero Data Architecture</h3>
+      <ul>
+        <li>Operator does not store messages, photos, or location — technically impossible</li>
+        <li>6-character session code only in server memory, deleted when session connects or times out in 10 minutes</li>
+        <li>IP used only for rate limiting, not permanently logged</li>
+        <li>No cookies, localStorage, or cross-session tracking</li>
+      </ul>
+      <h3>5. User Prohibitions (ITE Law)</h3>
+      <p>Prohibited: pornography or content involving minors, defamation, extortion and threats, false news (hoaxes), SARA hate speech, fraud, online gambling, stalking without consent, or any other illegal activity under Indonesian law.</p>
+      <h3>6. Advertising Policy</h3>
+      <p>Only manually selected ads are displayed. <strong>Prohibited:</strong> online gambling, pornography, illegal products, deceptive ads.</p>
+      <h3>7. Reporting &amp; Liability</h3>
+      <p>Report abuse to operator email. Operator is not liable for content between users due to E2E encryption. Full responsibility lies with users.</p>
+      <h3>8. Automatic Access Restriction</h3>
+      <p>More than 5 connection attempts within 1 hour = automatic 24-hour IP suspension.</p>
+      <h3>9. Law &amp; Changes</h3>
+      <p>Governed by Indonesian law. Terms may change at any time.</p>
+      <div class="tos-meta">Version 1.1 | Effective: 2025 | Governing language: Bahasa Indonesia</div>
     </div>
 
     <div class="modal-actions">
-      <button class="btn btn-secondary" id="premium-cancel-btn">Nanti saja</button>
-      <button class="btn btn-gold" id="premium-pay-btn">Bayar sekarang</button>
+      <button class="btn" id="tos-close">Tutup</button>
     </div>
   </div>
 </div>
 
-<div class="modal-overlay" id="terms-modal">
-  <div class="modal">
-    <div class="modal-title">Syarat & Ketentuan</div>
-    <div class="modal-subtitle" style="line-height:1.6; max-height:50vh; overflow-y:auto; padding-right:8px;">
-      <strong>1. Penggunaan yang diizinkan</strong><br>
-      Layanan ini disediakan untuk komunikasi pribadi yang sah. Dilarang menggunakan untuk: pelecehan, ancaman, penyebaran konten ilegal, penipuan, atau aktivitas yang melanggar hukum Indonesia.<br><br>
-
-      <strong>2. Privasi data</strong><br>
-      Pesan teks dan foto dikirim peer-to-peer dengan enkripsi end-to-end. Operator layanan tidak memiliki akses ke isi pesan atau foto anda. Tidak ada history yang disimpan.<br><br>
-
-      <strong>3. Pembayaran Premium</strong><br>
-      Pembayaran Rp 10.000 berlaku untuk satu sesi chat saja dan tidak dapat di-refund setelah fitur aktif. Pembayaran diproses melalui penyedia payment gateway pihak ketiga.<br><br>
-
-      <strong>4. Batasan tanggung jawab</strong><br>
-      Operator tidak bertanggung jawab atas konten yang dipertukarkan antar pengguna. Pengguna sepenuhnya bertanggung jawab atas konten yang mereka kirim.<br><br>
-
-      <strong>5. Konten ilegal</strong><br>
-      Penggunaan untuk pertukaran konten ilegal (termasuk namun tidak terbatas pada konten yang melibatkan anak di bawah umur, ancaman, penipuan) akan dilaporkan ke pihak berwajib sesuai UU ITE.
-    </div>
-    <div class="modal-actions">
-      <button class="btn" id="terms-close-btn" style="width:100%;">Tutup</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="location-modal">
-  <div class="modal">
-    <div class="modal-title">📍 Kirim Lokasi</div>
-    <div class="modal-subtitle">Pilih jenis lokasi yang ingin dibagikan</div>
-    <div class="modal-actions" style="flex-direction:column; gap:10px;">
-      <button class="btn" id="send-pin-btn">📍 Kirim lokasi sekali</button>
-      <button class="btn btn-secondary" id="send-live-btn">🟢 Live tracking (5 menit)</button>
-      <button class="btn btn-secondary" id="location-cancel-btn">Batal</button>
-    </div>
-  </div>
-</div>
-
+<!-- Photo viewer -->
 <div class="photo-viewer" id="photo-viewer">
-  <button class="photo-viewer-close" id="photo-viewer-close">✕</button>
-  <img id="photo-viewer-img" alt="">
+  <button class="pv-close" id="pv-close">✕</button>
+  <img id="pv-img" alt="">
 </div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
 
 <script src="config.js"></script>
+<script>
+// ── Inline language switcher — runs BEFORE app.js ──────────
+// Semua teks di-hardcode di HTML (ID default).
+// Fungsi ini hanya swap teks saat user klik EN/ID.
+// Tidak bergantung pada app.js untuk render awal.
+
+var ZK_STRINGS = {
+  id: {
+    tagline:    'Chat privat tanpa jejak. Tidak ada akun, tidak ada server menyimpan pesan, tidak ada history. Tutup tab — semuanya hilang.',
+    newchat:    'Mulai percakapan baru',
+    genBtn:     'Buat kode unik',
+    or:         'atau',
+    joinchat:   'Gabung dengan kode',
+    joinPh:     'Masukkan kode 6 karakter',
+    joinBtn:    'Gabung',
+    yourcode:   'Kode anda',
+    copyCode:   'Salin kode',
+    copyLink:   'Salin link',
+    share:      'Bagikan',
+    waiting:    'Bagikan kode ini ke lawan bicara. Menunggu mereka bergabung...',
+    cancel:     'Batal',
+    adLbl:      'Sponsor',
+    adText:     '🛡️ Jaga privasi anda dengan ProtonVPN — gratis & no-logs',
+    priv1:      'Peer-to-peer terenkripsi (WebRTC + DTLS)',
+    priv2:      'Foto & lokasi dikirim langsung, tidak lewat server',
+    priv3:      'Tidak ada history, tidak ada log',
+    priv4:      'Sesi maksimal 12 jam, otomatis reset',
+    priv5:      'Tutup tab = semua data hilang selamanya',
+    ctrLabel:   'Digunakan',
+    ctrSuffix:  'kali',
+    donate:     '💎 Donasi via TON',
+    tos:        'Syarat & Ketentuan',
+    donateDesc: 'Kalau anda merasa terbantu dan suka dengan ini, bantu donasi untuk developer 😊',
+    legal:      'Dengan menggunakan layanan ini anda setuju tidak menggunakannya untuk hal yang melanggar hukum.',
+    chatTitle:  'Sesi Privat',
+    connected:  'Terhubung • End-to-end terenkripsi',
+    reconn:     'Menghubungkan kembali...',
+    disconn:    'Terputus',
+    leave:      'Keluar',
+    msgPh:      'Ketik pesan...',
+    locTitle:   '📍 Kirim Lokasi',
+    locSub:     'Pilih jenis lokasi yang ingin dibagikan',
+    locPin:     '📍 Kirim lokasi sekali',
+    locLive:    '🟢 Live tracking (5 menit)',
+    locCancel:  'Batal',
+    tosTitle:   'Syarat & Ketentuan',
+    tosClose:   'Tutup',
+    copied:     'Tersalin ✓',
+    copiedLink: 'Link tersalin ✓',
+    confirmLeave: 'Keluar dari chat? Semua pesan akan hilang permanen.',
+    sysConnected: 'Koneksi peer-to-peer aman tersambung. Pesan tidak melewati server.',
+    sysTabSafe:   'Pindah tab atau minimize aman — hanya tutup tab yang mengakhiri sesi.',
+    sysLeft:      'Lawan bicara telah keluar.',
+    sysDisconn:   'Koneksi terputus.',
+    sysTyping:    'Lawan bicara sedang mengetik...',
+    sysCompress:  'Mengompres foto...',
+    sysPhotoFail: 'Gagal kirim foto: ',
+    sysPhotoType: 'File harus berupa gambar.',
+    sysPhotoBig:  'Foto terlalu besar setelah dikompres.',
+    sysGettingLoc:'Mengambil lokasi...',
+    sysLocFail:   'Gagal ambil lokasi: ',
+    sysNoGPS:     'Browser tidak mendukung GPS.',
+    sysLiveOn:    'Live tracking sudah aktif.',
+    sysLiveErr:   'Error GPS: ',
+    sysLiveStart: 'Lawan bicara mulai live tracking selama 5 menit',
+    sysLiveEnd:   '⚫ Live tracking berakhir',
+    sysMsgLong:   'Pesan terlalu panjang.',
+    sysExpPeer:   'Lawan bicara mencapai batas sesi. Halaman akan reload.',
+    sysWarn10:    '⚠️ Sesi berakhir dalam 10 menit. Halaman akan auto-reload.',
+    sysWarn1:     '⚠️ Sesi berakhir dalam 1 menit!',
+    sysExpAlert:  'Sesi 12 jam telah berakhir. Halaman akan reload otomatis.',
+    locShared:    'Lokasi dibagikan',
+    locYours:     'Lokasi anda',
+    locLiveActive:'🟢 Live tracking aktif',
+    locLiveWait:  'Menunggu lokasi...',
+    rateLimited:  '⛔ IP anda di-suspend',
+    rateHours:    'jam karena terlalu banyak percobaan koneksi.',
+    errConnect:   'Gagal terhubung: ',
+    errCode6:     'Kode harus 6 karakter.',
+    errCodeTaken: 'Kode sudah digunakan. Coba lagi.',
+    errCodeNF:    'Kode tidak ditemukan atau sudah expired.',
+    errPeerLeft:  'Pengguna lain membatalkan.',
+    connecting:   'Menghubungkan...',
+    shareText:    'Kode ZK Chat saya: ',
+  },
+  en: {
+    tagline:    'Private chat with no trace. No account, no server storing messages, no history. Close the tab — everything is gone.',
+    newchat:    'Start a new conversation',
+    genBtn:     'Generate unique code',
+    or:         'or',
+    joinchat:   'Join with a code',
+    joinPh:     'Enter 6-character code',
+    joinBtn:    'Join',
+    yourcode:   'Your code',
+    copyCode:   'Copy code',
+    copyLink:   'Copy link',
+    share:      'Share',
+    waiting:    'Share this code with your contact. Waiting for them to join...',
+    cancel:     'Cancel',
+    adLbl:      'Sponsor',
+    adText:     '🛡️ Protect your privacy with ProtonVPN — free & no-logs',
+    priv1:      'Peer-to-peer encrypted (WebRTC + DTLS)',
+    priv2:      'Photos & location sent directly, never through the server',
+    priv3:      'No history, no logs',
+    priv4:      'Session max 12 hours, auto-reset',
+    priv5:      'Close tab = all data gone permanently',
+    ctrLabel:   'Used',
+    ctrSuffix:  'times',
+    donate:     '💎 Donate via TON',
+    tos:        'Terms & Conditions',
+    donateDesc: 'If you find this helpful and enjoy it, please consider donating to support the developer 😊',
+    legal:      'By using this service you agree not to use it for anything that violates the law.',
+    chatTitle:  'Private Session',
+    connected:  'Connected • End-to-end encrypted',
+    reconn:     'Reconnecting...',
+    disconn:    'Disconnected',
+    leave:      'Leave',
+    msgPh:      'Type a message...',
+    locTitle:   '📍 Send Location',
+    locSub:     'Choose the type of location to share',
+    locPin:     '📍 Send location once',
+    locLive:    '🟢 Live tracking (5 minutes)',
+    locCancel:  'Cancel',
+    tosTitle:   'Terms & Conditions',
+    tosClose:   'Close',
+    copied:     'Copied ✓',
+    copiedLink: 'Link copied ✓',
+    confirmLeave: 'Leave chat? All messages will be permanently deleted.',
+    sysConnected: 'Secure peer-to-peer connection established. Messages do not pass through the server.',
+    sysTabSafe:   'Switching tabs or minimizing is safe — only closing the tab ends the session.',
+    sysLeft:      'The other person has left.',
+    sysDisconn:   'Connection lost.',
+    sysTyping:    'Other person is typing...',
+    sysCompress:  'Compressing photo...',
+    sysPhotoFail: 'Failed to send photo: ',
+    sysPhotoType: 'File must be an image.',
+    sysPhotoBig:  'Photo too large after compression.',
+    sysGettingLoc:'Getting location...',
+    sysLocFail:   'Failed to get location: ',
+    sysNoGPS:     'Your browser does not support GPS.',
+    sysLiveOn:    'Live tracking is already active.',
+    sysLiveErr:   'GPS error: ',
+    sysLiveStart: 'Other person started live tracking for 5 minutes',
+    sysLiveEnd:   '⚫ Live tracking ended',
+    sysMsgLong:   'Message too long.',
+    sysExpPeer:   'Other person reached session limit. Page will reload.',
+    sysWarn10:    '⚠️ Session ends in 10 minutes. Page will auto-reload.',
+    sysWarn1:     '⚠️ Session ends in 1 minute!',
+    sysExpAlert:  '12-hour session has ended. Page will reload automatically.',
+    locShared:    'Location shared',
+    locYours:     'Your location',
+    locLiveActive:'🟢 Live tracking active',
+    locLiveWait:  'Waiting for location...',
+    rateLimited:  '⛔ Your IP is suspended for',
+    rateHours:    'hours due to too many connection attempts.',
+    errConnect:   'Connection failed: ',
+    errCode6:     'Code must be 6 characters.',
+    errCodeTaken: 'Code already in use. Please try again.',
+    errCodeNF:    'Code not found or already expired.',
+    errPeerLeft:  'The other person cancelled.',
+    connecting:   'Connecting...',
+    shareText:    'My ZK Chat code: ',
+  }
+};
+
+var _lang = 'id';
+try { _lang = localStorage.getItem('zk-lang') || 'id'; } catch(e) {}
+
+function zkLang(l) {
+  _lang = l;
+  try { localStorage.setItem('zk-lang', l); } catch(e) {}
+  var s = ZK_STRINGS[l] || ZK_STRINGS.id;
+  var id = (l === 'id');
+
+  // lang buttons
+  document.getElementById('btn-id').classList.toggle('active', id);
+  document.getElementById('btn-en').classList.toggle('active', !id);
+
+  // landing texts
+  document.getElementById('txt-tagline').textContent  = s.tagline;
+  document.getElementById('txt-newchat').textContent  = s.newchat;
+  document.getElementById('gen-btn').textContent      = s.genBtn;
+  document.getElementById('txt-or').textContent       = s.or;
+  document.getElementById('txt-joinchat').textContent = s.joinchat;
+  document.getElementById('join-input').placeholder   = s.joinPh;
+  document.getElementById('join-btn').textContent     = s.joinBtn;
+  document.getElementById('txt-yourcode').textContent = s.yourcode;
+  document.getElementById('copy-code-btn').textContent= s.copyCode;
+  document.getElementById('copy-link-btn').textContent= s.copyLink;
+  document.getElementById('share-btn').textContent    = s.share;
+  document.getElementById('txt-waiting').textContent  = s.waiting;
+  document.getElementById('cancel-btn').textContent   = s.cancel;
+  document.getElementById('priv1').textContent        = '✓ ' + s.priv1;
+  document.getElementById('priv2').textContent        = '✓ ' + s.priv2;
+  document.getElementById('priv3').textContent        = '✓ ' + s.priv3;
+  document.getElementById('priv4').textContent        = '✓ ' + s.priv4;
+  document.getElementById('priv5').textContent        = '✓ ' + s.priv5;
+  document.getElementById('counter-label').textContent = s.ctrLabel;
+  document.getElementById('counter-suffix').textContent= s.ctrSuffix;
+  document.getElementById('donate-link').textContent  = s.donate;
+  document.getElementById('tos-link').textContent     = s.tos;
+  document.getElementById('donate-desc').textContent  = s.donateDesc;
+  document.getElementById('txt-legal').textContent    = s.legal;
+
+  // chat header
+  document.getElementById('chat-title').textContent  = s.chatTitle;
+  document.getElementById('leave-btn').textContent   = s.leave;
+  document.getElementById('msg-input').placeholder   = s.msgPh;
+
+  // location modal
+  document.getElementById('txt-locTitle').textContent = s.locTitle;
+  document.getElementById('txt-locSub').textContent   = s.locSub;
+  document.getElementById('loc-pin-btn').textContent  = s.locPin;
+  document.getElementById('loc-live-btn').textContent = s.locLive;
+  document.getElementById('loc-cancel-btn').textContent= s.locCancel;
+
+  // tos
+  document.getElementById('txt-tosTitle').textContent = s.tosTitle;
+  document.getElementById('tos-close').textContent    = s.tosClose;
+  document.getElementById('tos-id').style.display     = id ? 'block' : 'none';
+  document.getElementById('tos-en').style.display     = id ? 'none'  : 'block';
+
+  // ad text (manual sponsor)
+  var adLink = document.getElementById('ad-link');
+  if (adLink) adLink.textContent = s.adText;
+
+  // html lang attribute
+  document.documentElement.lang = l;
+
+  // expose to app.js
+  window._zkLang = l;
+  window._zkStrings = s;
+}
+
+// Apply immediately on load
+zkLang(_lang);
+</script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -11,10 +11,20 @@
   // ── DOM helper — HARUS di atas semua fungsi yang menggunakannya ──
   const $ = id => document.getElementById(id);
 
-  // ── i18n ─────────────────────────────────────────────────
-  let lang = localStorage.getItem('zk-lang') || 'id';
+  // ── i18n — pakai strings yang sudah diload oleh inline script di HTML ──
+  // ZK_STRINGS dan zkLang() sudah dijalankan sebelum app.js diload
+  function t(key) {
+    var s = window._zkStrings || (window.ZK_STRINGS && window.ZK_STRINGS.id) || {};
+    return s[key] || key;
+  }
 
-  function t(key) { return (I[lang] && I[lang][key]) || (I.id && I.id[key]) || key; }
+  function switchLang(l) {
+    if (window.zkLang) window.zkLang(l);
+    lang = l;
+    updateCounterLabels();
+  }
+
+  let lang = window._zkLang || 'id';
 
   function fetchCounter() {
     fetch('/api/stats')
@@ -39,70 +49,15 @@
     if (suffix) suffix.textContent = lang === 'en' ? 'times' : 'kali';
   }
 
-  function applyLang() {
-    document.documentElement.lang = lang;
-
-    // text nodes
-    document.querySelectorAll('[data-t]').forEach(el => {
-      el.textContent = t(el.dataset.t);
-    });
-    // placeholders
-    document.querySelectorAll('[data-t-placeholder]').forEach(el => {
-      el.placeholder = t(el.dataset.tPlaceholder);
-    });
-
-    // sponsor ad (manual mode only — EthicalAds manages its own content)
-    const adLink = $('ad-link');
-    if (adLink && C.sponsor?.enabled && !(C.ethicalAds?.enabled && C.ethicalAds?.publisherId)) {
-      adLink.textContent = lang === 'en'
-        ? (C.sponsor.text_en || C.sponsor.text_id)
-        : (C.sponsor.text_id || C.sponsor.text_en);
-      adLink.href = C.sponsor.link;
-    }
-
-    // donate
-    const dl = $('donate-link');
-    if (dl && C.donate?.enabled) {
-      dl.textContent = lang === 'en'
-        ? (C.donate.label_en || C.donate.label_id)
-        : (C.donate.label_id || C.donate.label_en);
-    }
-
-    const dd = $('donate-desc');
-    if (dd && C.donate?.enabled) {
-      dd.textContent = lang === 'en'
-        ? (C.donate.desc_en || C.donate.desc_id || '')
-        : (C.donate.desc_id || C.donate.desc_en || '');
-      dd.style.display = dd.textContent ? 'block' : 'none';
-    }
-
-    // ToS sections
-    const tosId = $('tos-id'), tosEn = $('tos-en');
-    if (tosId && tosEn) {
-      tosId.style.display = lang === 'id' ? 'block' : 'none';
-      tosEn.style.display = lang === 'en' ? 'block' : 'none';
-    }
-
-    // lang buttons
-    $('btn-id').classList.toggle('active', lang === 'id');
-    $('btn-en').classList.toggle('active', lang === 'en');
-
-    updateCounterLabels();
-
-    // live UI strings that may be showing
-    if ($('chat-sub').textContent) {
-      const sub = $('chat-sub').textContent;
-      if (sub && connectedState !== null) {
-        $('chat-sub').textContent = connectedState ? t('connectedSub') : t('disconnected');
-      }
+  // applyLang sekarang dihandle oleh zkLang() di inline script HTML
+  // Ini hanya update chat-sub saat bahasa berganti di dalam chat
+  function applyLangChat() {
+    if (connectedState !== null) {
+      const sub = $('chat-sub');
+      if (sub) sub.textContent = connectedState ? t('connected') : t('disconn');
     }
   }
 
-  function switchLang(l) {
-    lang = l;
-    try { localStorage.setItem('zk-lang', l); } catch {}
-    applyLang();
-  }
 
   // ── state ─────────────────────────────────────────────────
   let ws = null, pc = null, dc = null;
@@ -158,7 +113,6 @@
     } else if (dl) { dl.style.display = 'none'; }
 
     if (navigator.share) $('share-btn').classList.add('show');
-    applyLang();
     fetchCounter();
   }
 
@@ -308,7 +262,7 @@
     pc.onicecandidate = e => { if (e.candidate) sig({type:'ice', candidate:e.candidate}); };
     pc.onconnectionstatechange = () => {
       if      (pc.connectionState === 'connected')    setConn(true);
-      else if (pc.connectionState === 'disconnected') { setConn(false); chatSub.textContent = t('reconnecting'); }
+      else if (pc.connectionState === 'disconnected') { setConn(false); const cs = $('chat-sub'); if(cs) cs.textContent = t('reconn'); }
       else if (pc.connectionState === 'failed')       setConn(false);
     };
     pc.oniceconnectionstatechange = () => {
@@ -385,7 +339,8 @@
   function setConn(ok) {
     connectedState = ok;
     connDot.classList.toggle('off', !ok);
-    chatSub.textContent = ok ? t('connectedSub') : t('disconnected');
+    const sub = $('chat-sub');
+    if (sub) sub.textContent = ok ? t('connected') : t('disconn');
   }
 
   function showChat() {
@@ -579,7 +534,6 @@
   // ── events ────────────────────────────────────────────────
   $('btn-id').addEventListener('click', () => switchLang('id'));
   $('btn-en').addEventListener('click', () => switchLang('en'));
-
   $('gen-btn').addEventListener('click', startSession);
   $('join-btn').addEventListener('click', () => joinSession($('join-input').value));
   $('join-input').addEventListener('keydown', e => { if (e.key === 'Enter') joinSession(e.target.value); });
