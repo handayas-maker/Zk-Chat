@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -213,8 +213,8 @@ input[type="text"]::placeholder{text-transform:none;letter-spacing:normal;color:
 <div id="app">
 
 <div class="lang-bar">
-  <button class="lang-btn active" id="btn-id" onclick="zkLang('id')">ID</button>
-  <button class="lang-btn"        id="btn-en" onclick="zkLang('en')">EN</button>
+  <button class="lang-btn"        id="btn-id" onclick="zkLang('id')">ID</button>
+  <button class="lang-btn active" id="btn-en" onclick="zkLang('en')">EN</button>
 </div>
 
 <!-- ═══ LANDING ═══ -->
@@ -297,12 +297,25 @@ input[type="text"]::placeholder{text-transform:none;letter-spacing:normal;color:
 
   <!-- Footer -->
   <div class="footer">
-    <a href="#" id="donate-link" target="_blank" rel="noopener">💎 Donasi via TON</a>
+    <a href="ton://transfer/UQBToS2GOQ59AX7IHs0blnIT7hXW3zWQCJZyPEFCTS0l7Km" id="donate-link" target="_blank" rel="noopener">💎 Donasi via TON</a>
     <a href="#" id="tos-link">Syarat &amp; Ketentuan</a>
   </div>
   <p class="donate-desc" id="donate-desc">
     Kalau anda merasa terbantu dan suka dengan ini, bantu donasi untuk developer 😊
   </p>
+
+  <!-- TON wallet address — bisa di-copy manual -->
+  <div id="ton-addr-box" style="margin-top:10px; padding:10px 12px; background:var(--inp); border:1px solid var(--bdr); border-radius:10px; display:flex; align-items:center; gap:8px;">
+    <span style="font-size:16px; flex-shrink:0;">💎</span>
+    <span id="ton-addr-text" style="font-family:'SF Mono','Fira Code',monospace; font-size:10px; color:var(--dim); word-break:break-all; flex:1; line-height:1.5;">UQBToS2GOQ59AX7IHs0blnIT7hXW3zWQCJZyPEFCTS0l7Km</span>
+    <button id="ton-copy-btn" onclick="
+      navigator.clipboard.writeText('UQBToS2GOQ59AX7IHs0blnIT7hXW3zWQCJZyPEFCTS0l7Km').then(()=>{
+        this.textContent='✓';
+        setTimeout(()=>{ this.textContent=document.documentElement.lang==='en'?'Copy':'Salin'; },1500);
+      });
+    " style="background:transparent; border:1px solid var(--bdr); color:var(--dim); padding:4px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-family:inherit; flex-shrink:0; white-space:nowrap;">Salin</button>
+  </div>
+
   <p class="legal" id="txt-legal">
     Dengan menggunakan layanan ini anda setuju tidak menggunakannya untuk hal yang melanggar hukum.
   </p>
@@ -610,8 +623,8 @@ var ZK_STRINGS = {
   }
 };
 
-var _lang = 'id';
-try { _lang = localStorage.getItem('zk-lang') || 'id'; } catch(e) {}
+var _lang = 'en';
+try { _lang = localStorage.getItem('zk-lang') || 'en'; } catch(e) {}
 
 function zkLang(l) {
   _lang = l;
@@ -648,6 +661,10 @@ function zkLang(l) {
   document.getElementById('tos-link').textContent     = s.tos;
   document.getElementById('donate-desc').textContent  = s.donateDesc;
   document.getElementById('txt-legal').textContent    = s.legal;
+
+  // TON copy button label
+  var tonBtn = document.getElementById('ton-copy-btn');
+  if (tonBtn && tonBtn.textContent !== '✓') tonBtn.textContent = id ? 'Salin' : 'Copy';
 
   // chat header
   document.getElementById('chat-title').textContent  = s.chatTitle;
