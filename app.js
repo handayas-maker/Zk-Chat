@@ -224,6 +224,18 @@
   }
   function sig(obj) { if (ws?.readyState === 1) ws.send(JSON.stringify(obj)); }
 
+  // Queue ICE candidates yang datang sebelum remote description siap
+  let _iceQueue = [];
+  let _remoteReady = false;
+
+  async function drainIceQueue() {
+    _remoteReady = true;
+    for (const candidate of _iceQueue) {
+      try { await pc.addIceCandidate(candidate); } catch {}
+    }
+    _iceQueue = [];
+  }
+
   async function onSignal(evt) {
     let m; try { m = JSON.parse(evt.data); } catch { return; }
     switch (m.type) {
@@ -236,17 +248,40 @@
       case 'code-not-found':
         setStatus(t('errCodeNotFound'), 's-error'); resetLanding(); break;
       case 'peer-joined':
+        _iceQueue = []; _remoteReady = false;
+        // Update status waiting → connecting
+        const waitSt = $('opts-waiting')?.querySelector('.status');
+        if (waitSt) {
+          waitSt.textContent = lang === 'en' ? 'Peer found! Establishing connection...' : 'Peer ditemukan! Membangun koneksi...';
+          waitSt.className = 'status s-info';
+        }
         await makePeer();
-        const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
-        sig({type:'offer', sdp:offer}); break;
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        sig({type:'offer', sdp:offer});
+        break;
       case 'offer':
-        await makePeer(); await pc.setRemoteDescription(m.sdp);
-        const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
-        sig({type:'answer', sdp:ans}); break;
+        _iceQueue = []; _remoteReady = false;
+        await makePeer();
+        await pc.setRemoteDescription(m.sdp);
+        const ans = await pc.createAnswer();
+        await pc.setLocalDescription(ans);
+        sig({type:'answer', sdp:ans});
+        await drainIceQueue(); // flush ICE yang antri
+        break;
       case 'answer':
-        await pc.setRemoteDescription(m.sdp); break;
+        await pc.setRemoteDescription(m.sdp);
+        await drainIceQueue(); // flush ICE yang antri
+        break;
       case 'ice':
-        if (pc && m.candidate) try { await pc.addIceCandidate(m.candidate); } catch {} break;
+        if (!pc) break;
+        if (_remoteReady) {
+          try { await pc.addIceCandidate(m.candidate); } catch {}
+        } else {
+          // Remote desc belum siap — antri dulu
+          _iceQueue.push(m.candidate);
+        }
+        break;
       case 'peer-left':
         setStatus(t('errPeerLeft'), 's-error'); resetLanding(); break;
     }
@@ -254,40 +289,67 @@
 
   // ── WebRTC ────────────────────────────────────────────────
   async function makePeer() {
-    pc = new RTCPeerConnection({ iceServers: [
-      // STUN servers — multiple untuk fallback
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' },
-      { urls: 'stun:stun.cloudflare.com:3478' },
-      { urls: 'stun:stun.stunprotocol.org:3478' },
-      { urls: 'stun:stun.voip.blackberry.com:3478' },
-      // TURN server gratis dari Open Relay Project
-      // Membantu koneksi di belakang NAT ketat (mobile data seluler)
-      {
-        urls: [
-          'turn:openrelay.metered.ca:80',
-          'turn:openrelay.metered.ca:443',
-          'turn:openrelay.metered.ca:443?transport=tcp',
-        ],
-        username: 'openrelayproject',
-        credential: 'openrelayproject',
-      },
-    ],
-    iceCandidatePoolSize: 10,
+    pc = new RTCPeerConnection({
+      iceServers: [
+        // Cukup 2-3 STUN — lebih banyak justru memperlambat ICE gathering
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        // TURN server — fallback untuk NAT ketat / mobile data seluler
+        {
+          urls: [
+            'turn:openrelay.metered.ca:80',
+            'turn:openrelay.metered.ca:443',
+            'turn:openrelay.metered.ca:443?transport=tcp',
+          ],
+          username: 'openrelayproject',
+          credential: 'openrelayproject',
+        },
+      ],
+      // Pre-gather candidates sebelum offer/answer — mempercepat koneksi
+      iceCandidatePoolSize: 5,
+      // Bundling semua media di satu transport — lebih cepat
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
     });
+
     pc.onicecandidate = e => { if (e.candidate) sig({type:'ice', candidate:e.candidate}); };
+
     pc.onconnectionstatechange = () => {
-      if      (pc.connectionState === 'connected')    setConn(true);
-      else if (pc.connectionState === 'disconnected') { setConn(false); const cs = $('chat-sub'); if(cs) cs.textContent = t('reconn'); }
-      else if (pc.connectionState === 'failed')       setConn(false);
+      const state = pc.connectionState;
+      if (state === 'connected') {
+        setConn(true);
+      } else if (state === 'disconnected') {
+        setConn(false);
+        const cs = $('chat-sub'); if (cs) cs.textContent = t('reconn');
+        // Coba ICE restart setelah 2 detik
+        setTimeout(() => {
+          if (pc?.connectionState === 'disconnected') try { pc.restartIce(); } catch {}
+        }, 2000);
+      } else if (state === 'failed') {
+        setConn(false);
+        // Coba ICE restart sekali lagi sebelum menyerah
+        try { pc.restartIce(); } catch {}
+      }
     };
+
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'disconnected')
-        setTimeout(() => { if (pc?.iceConnectionState === 'disconnected') try { pc.restartIce(); } catch {} }, 3000);
+      const s = pc.iceConnectionState;
+      const sub = $('chat-sub');
+      if (s === 'checking') {
+        // Kasih tahu user sedang proses handshake
+        if (sub) sub.textContent = lang === 'en' ? 'Connecting...' : 'Menghubungkan...';
+      } else if (s === 'connected' || s === 'completed') {
+        // Akan di-handle oleh onconnectionstatechange
+      } else if (s === 'failed') {
+        if (sub) sub.textContent = lang === 'en' ? 'Retrying...' : 'Mencoba ulang...';
+        try { pc.restartIce(); } catch {}
+      } else if (s === 'disconnected') {
+        setTimeout(() => {
+          if (pc?.iceConnectionState === 'disconnected') try { pc.restartIce(); } catch {}
+        }, 2000);
+      }
     };
+
     if (isInitiator) { dc = pc.createDataChannel('chat', {ordered:true}); setupDC(dc); }
     else { pc.ondatachannel = e => { dc = e.channel; setupDC(dc); }; }
   }
@@ -369,6 +431,7 @@
 
   function resetLanding() {
     stopTimer(); stopLive(); connectedState = null;
+    _iceQueue = []; _remoteReady = false;
     if (dc)  { try { dc.close();  } catch {} dc  = null; }
     if (pc)  { try { pc.close();  } catch {} pc  = null; }
     if (ws)  { try { ws.close();  } catch {} ws  = null; }
