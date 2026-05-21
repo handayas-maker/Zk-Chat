@@ -224,10 +224,9 @@ wss.on('connection', (ws, req) => {
         if (rooms.has(code)) {
           const existing = rooms.get(code);
           if (existing.joiner) {
-            // Sudah ada peer yang join — tolak
             return send(ws, {type:'code-taken'});
           }
-          // Belum ada joiner — ini reconnect, update initiator WS
+          // Reconnect — restore initiator (bisa null saat grace period)
           clearTimeout(existing.timeout);
           existing.initiator = ws;
           existing.timeout = setTimeout(() => {
@@ -237,6 +236,11 @@ wss.on('connection', (ws, req) => {
           }, ROOM_TTL);
           ws._code = code; ws._role = 'initiator';
           send(ws, {type:'registered'});
+          // Kalau ada joiner yang sudah waiting — langsung connect
+          if (existing.joiner && existing.joinerPending) {
+            existing.joinerPending = false;
+            send(ws, {type:'peer-joined'});
+          }
           break;
         }
 
@@ -259,11 +263,18 @@ wss.on('connection', (ws, req) => {
         if (!room || room.joiner) return send(ws, {type:'code-not-found'});
         ws._code = code; ws._role = 'joiner';
         room.joiner = ws;
-        clearTimeout(room.timeout); room.timeout = null;
-        // Increment counter — satu sesi = satu pasangan berhasil konek
+        if (room.timeout) { clearTimeout(room.timeout); room.timeout = null; }
         counterIncrement().catch(() => {});
-        send(room.initiator, {type:'peer-joined'});
-        send(ws, {type:'join-success'});
+        if (room.initiator && room.initiator.readyState === 1) {
+          // Initiator online — langsung beritahu
+          send(room.initiator, {type:'peer-joined'});
+          send(ws, {type:'join-success'});
+        } else {
+          // Initiator sedang offline (grace period) — joiner tunggu
+          // Saat initiator reconnect & register, server akan beritahu
+          room.joinerPending = true;
+          send(ws, {type:'join-success'});
+        }
         break;
       }
 
@@ -283,9 +294,31 @@ wss.on('connection', (ws, req) => {
     if (!ws._code) return;
     const room = rooms.get(ws._code);
     if (!room) return;
-    const peer = ws._role === 'initiator' ? room.joiner : room.initiator;
-    if (peer) send(peer, {type:'peer-left'});
-    cleanRoom(ws._code);
+
+    if (ws._role === 'joiner') {
+      // Joiner disconnect — beritahu initiator
+      if (room.initiator) send(room.initiator, {type:'peer-left'});
+      cleanRoom(ws._code);
+      return;
+    }
+
+    if (ws._role === 'initiator') {
+      if (room.joiner) {
+        // Sudah ada joiner (sedang chat) — beritahu joiner
+        send(room.joiner, {type:'peer-left'});
+        cleanRoom(ws._code);
+        return;
+      }
+
+      // Belum ada joiner — initiator disconnect saat waiting
+      // Beri grace period 2 menit supaya bisa reconnect dengan kode yang sama
+      // (pindah tab, sinyal lemah, dll)
+      if (room.timeout) clearTimeout(room.timeout);
+      room.initiator = null; // tandai initiator offline
+      room.timeout = setTimeout(() => {
+        cleanRoom(ws._code);
+      }, 2 * 60 * 1000); // 2 menit grace period
+    }
   });
 
   ws.on('error', () => {});
