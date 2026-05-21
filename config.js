@@ -2,9 +2,9 @@ window.ZK_CONFIG = {
 
   sponsor: {
     enabled: true,
-    text_id: "🛡️ Jaga privasi anda dengan ProtonVPN — gratis & no-logs",
-    text_en: "🛡️ Protect your privacy with ProtonVPN — free & no-logs",
-    link: "https://protonvpn.com",
+    text_id: "📢 Pasang iklan anda di sini — hubungi zkchat@proton.me",
+    text_en: "📢 Advertise here — contact zkchat@proton.me for info",
+    link: "mailto:zkchat@proton.me",
   },
 
   // EthicalAds — ad network tanpa tracking, khusus developer/privacy audience
